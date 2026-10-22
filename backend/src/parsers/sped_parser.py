@@ -12,6 +12,8 @@ class SpedParser:
     DOCUMENT_STATUS_CANCELLED = "02"
     TP_AMB_HOMOLOGATION = "2"
 
+    company_name: Optional[str] = None
+
     @staticmethod
     def _format_date(raw_date: str) -> str:
         raw_date = raw_date.strip()
@@ -74,7 +76,7 @@ class SpedParser:
         }
 
     @classmethod
-    def parse_sped_content(cls, sped_content: str, records: list) -> None:
+    def parse_sped_content(cls, sped_content: str, sped_batch: list) -> None:
         parsed_0000: Optional[list] = None
         sped_type: bool = False #False->SPED_COFINS True->SPED_FISCAL
 
@@ -90,6 +92,7 @@ class SpedParser:
                 if parsed_0000:
                     record_0000_number_fields = parsed_0000.get("fields")
                     sped_type = False if record_0000_number_fields >= 18 else True
+                    cls.company_name = parsed_0000.get("company_name")
 
             elif line.startswith(f"{cls.RECORD_DELIMITER}C100{cls.RECORD_DELIMITER}"):
                 parsed_c100 = cls._parse_record_c100(line)
@@ -103,4 +106,11 @@ class SpedParser:
                     sped_type,
                     parsed_c100.get("emission_date"),
                 )
-                records.append(record_tuple)
+
+                sped_batch.append(record_tuple)
+
+    @classmethod
+    def get_company_name(cls):
+        if cls.company_name:
+            return cls.company_name
+        raise BrokenPipeError(f"VERIFIQUE A PIPELINE: NOME DA EMPRESA NÃO ENCONTRADO")
