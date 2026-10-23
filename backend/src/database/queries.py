@@ -1,4 +1,4 @@
-CREATE_TEMP_TABLES = """
+CREATE_TEMP_TABLE_XML = """
 CREATE TEMP TABLE IF NOT EXISTS xml (
     access_key    VARCHAR(44) PRIMARY KEY,
     cnpj_issuer   VARCHAR(14),
@@ -7,7 +7,9 @@ CREATE TEMP TABLE IF NOT EXISTS xml (
     nfe_number    VARCHAR(6),
     emission_date DATE
 );
+"""
 
+CREATE_TEMP_TABLE_SPED = """
 CREATE TEMP TABLE IF NOT EXISTS sped (
     access_key    VARCHAR(44),
     value         BIGINT,
@@ -15,7 +17,9 @@ CREATE TEMP TABLE IF NOT EXISTS sped (
     emission_date DATE,
     PRIMARY KEY (access_key, sped_type)
 );
+"""
 
+CREATE_TEMP_TABLE_SINTEGRA = """
 CREATE TEMP TABLE IF NOT EXISTS sintegra (
     cnpj_issuer   VARCHAR(14),
     value         BIGINT,
@@ -25,4 +29,19 @@ CREATE TEMP TABLE IF NOT EXISTS sintegra (
     emission_date DATE,
     PRIMARY KEY (cnpj_issuer, nfe_series, nfe_number)
 );
+"""
+
+AUDIT_SINTEGRA_QUERY = """
+"""
+
+AUDIT_SPED_QUERY = """
+"""
+
+SINTEGRA_METRICS = """
+"""
+
+SPED_METRICS = """
+"""
+
+XML_METRICS = """
 """
