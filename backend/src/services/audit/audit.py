@@ -1,4 +1,5 @@
 from typing import Any, Callable, Dict, Optional, Union
+import pandas as pd
 import zipfile
 import duckdb
 import io
@@ -80,11 +81,14 @@ class Audit:
         metrics = self._calculate_metrics(execute_sql)
 
         audit_query = AUDIT_SPED_QUERY if self._is_sped else AUDIT_SINTEGRA_QUERY
-        df_divergencias = execute_sql(audit_query, None).df()
+        
+        df_divergencias: pd.DataFrame = execute_sql(audit_query, None).df()
+
+        df_divergencias = df_divergencias.fillna("")
 
         return {
             "metricas": metrics,
-            "dataframe": df_divergencias.to_dict(orient="records"),
+            "dataframe": df_divergencias.to_dict(orient="records")
         }
     
     def _parse_xml_zip(self) -> None:
