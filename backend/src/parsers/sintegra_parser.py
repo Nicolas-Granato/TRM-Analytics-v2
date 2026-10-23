@@ -27,7 +27,7 @@ class SintegraParser:
 
     @classmethod
     def _parse_record_10(cls, line_10: str) -> Optional[dict]:
-        if len(line_10) < 126 or not line_10.startswith("10"):
+        if len(line_10) < 125 or not line_10.startswith("10"):
             return None
 
         company_name = line_10[30:65].strip() or cls.FALLBACK_COMPANY_NAME
@@ -110,8 +110,8 @@ class SintegraParser:
         lines = sintegra_content.splitlines()
 
         for line in lines:
-            line = line.strip()
-            if not line:
+            line = line.rstrip("\\r\\n")
+            if not line.strip():
                 continue
 
             match line[:2]:

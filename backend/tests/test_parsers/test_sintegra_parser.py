@@ -1,5 +1,5 @@
 import pytest
-from backend.src.parsers.sintegra_parser import SintegraParser
+from src.parsers.sintegra_parser import SintegraParser
 
 
 @pytest.fixture(autouse=True)
@@ -12,18 +12,24 @@ def reset_sintegra_state():
 
 
 def build_fixed_line(prefix: str, content_dict: dict = None) -> str:
-    """Gera uma linha com tamanho fixo mínimo de 126 caracteres preenchida com espaços."""
+    """Gera uma linha com tamanho fixo EXATO de 126 caracteres preenchida com espaços."""
     line_chars = list(prefix.ljust(126, " "))
+    
     if content_dict:
         for (start, end), val in content_dict.items():
             val_str = str(val)
             length = end - start
-            line_chars[start:end] = list(val_str[:length].ljust(length, " "))
-    return "".join(line_chars)
+            formatted_val = val_str[:length].ljust(length, " ")
+            
+            for i, char in enumerate(formatted_val):
+                if start + i < 126:
+                    line_chars[start + i] = char
+                    
+    return "".join(line_chars[:126])
 
 
 # ==============================================================================
-# Testes do Método Auxiliar: _format_date (Complexidade V(G) = 3)
+# Testes do Método Auxiliar: _format_date
 # ==============================================================================
 
 class TestFormatDate:
@@ -41,7 +47,7 @@ class TestFormatDate:
 
 
 # ==============================================================================
-# Testes do Registro 10 (_parse_record_10) (Complexidade V(G) = 3)
+# Testes do Registro 10 (_parse_record_10)
 # ==============================================================================
 
 class TestParseRecord10:
@@ -73,7 +79,7 @@ class TestParseRecord10:
 
 
 # ==============================================================================
-# Testes do Registro 50 (_parse_record_50) (Complexidade V(G) = 4)
+# Testes do Registro 50 (_parse_record_50)
 # ==============================================================================
 
 class TestParseRecord50:
@@ -111,7 +117,7 @@ class TestParseRecord50:
 
 
 # ==============================================================================
-# Testes do Registro 54 (_parse_record_54) (Complexidade V(G) = 5)
+# Testes do Registro 54 (_parse_record_54)
 # ==============================================================================
 
 class TestParseRecord54:
@@ -151,7 +157,7 @@ class TestParseRecord54:
 
 
 # ==============================================================================
-# Testes do Registro 61 (_parse_record_61) (Complexidade V(G) = 3)
+# Testes do Registro 61 (_parse_record_61)
 # ==============================================================================
 
 class TestParseRecord61:
@@ -182,7 +188,7 @@ class TestParseRecord61:
 
 
 # ==============================================================================
-# Testes do Parser Completo (parse_sintegra) (Complexidade V(G) = 10)
+# Testes do Parser Completo (parse_sintegra)
 # ==============================================================================
 
 class TestParseSintegra:
@@ -233,8 +239,14 @@ class TestParseSintegra:
         assert rec_50["nfe_number"] == "000100"
 
     def test_parse_sintegra_ignores_subsequent_10_records(self):
-        line_10_first = build_fixed_line("10", {(30, 65): "PRIMEIRA EMPRESA"})
-        line_10_second = build_fixed_line("10", {(30, 65): "SEGUNDA EMPRESA"})
+        line_10_first = build_fixed_line("10", {
+            (2, 16): "12345678000195",
+            (30, 65): "PRIMEIRA EMPRESA"
+        })
+        line_10_second = build_fixed_line("10", {
+            (2, 16): "12345678000195",
+            (30, 65): "SEGUNDA EMPRESA"
+        })
 
         content = f"{line_10_first}\n{line_10_second}"
         batch = []
@@ -250,7 +262,7 @@ class TestParseSintegra:
 
 
 # ==============================================================================
-# Testes do Método: get_company_name (Complexidade V(G) = 2)
+# Testes do Método: get_company_name
 # ==============================================================================
 
 class TestGetCompanyName:
