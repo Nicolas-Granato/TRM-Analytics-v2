@@ -49,14 +49,31 @@ class Audit:
         self._fiscal_batch: list[tuple] = []
 
     def _calculate_metrics(self, execute_sql: Callable[[str, Optional[tuple]], duckdb.DuckDBPyConnection]) -> Dict[str, Any]:
-        xml_metrics = execute_sql(XML_METRICS, None).fetchall()
+        xml_row = execute_sql(XML_METRICS, None).fetchone()
 
-        query_metrics = SPED_METRICS if self._is_sped else SINTEGRA_METRICS
-        fiscal_archive_metrics = execute_sql(query_metrics, None).fetchall()
-
+        if self._is_sped:
+            sped_row = execute_sql(SPED_METRICS, None).fetchone()
+                
+            return {
+                "xml_metrics": {
+                    "total_count": xml_row[0] if xml_row else 0,
+                    "total_value": xml_row[1] if xml_row else 0
+                },
+                "fiscal_archive_metrics": {
+                    "total_count": sped_row[0] if sped_row else 0,
+                    "total_value": sped_row[1] if sped_row else 0
+                }
+            }
+        
+        sintegra_row = execute_sql(SINTEGRA_METRICS, None).fetchone()
+                
         return {
-            "xml_metrics": xml_metrics,
-            "fiscal_archive_metrics": fiscal_archive_metrics,
+            "xml_metrics": {
+            "total_value": xml_row[1] if xml_row else 0
+            },
+            "fiscal_archive_metrics": {
+            "total_value": sintegra_row[0] if sintegra_row else 0 
+            }
         }
 
     def _audit_query(self, execute_sql: Callable[[str, Optional[Any]], duckdb.DuckDBPyConnection]) -> Dict[str, Any]:
