@@ -37,6 +37,15 @@ AUDIT_SINTEGRA_QUERY = """
 AUDIT_SPED_QUERY = """
 """
 
+INSERT_SINTEGRA = """
+"""
+
+INSERT_SPED = """
+"""
+
+INSERT_XML = """
+"""
+
 SINTEGRA_METRICS = """
 """
 
