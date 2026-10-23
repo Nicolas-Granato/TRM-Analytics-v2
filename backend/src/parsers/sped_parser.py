@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List, Tuple
 
 class SpedParser:
 
@@ -60,11 +60,10 @@ class SpedParser:
 
         if len(fields) > 26 and fields[26].strip() == cls.TP_AMB_HOMOLOGATION:
             return None
-        
+
         access_key = fields[9].strip()
         if len(access_key) != cls.ACCESS_KEY_LENGTH:
             return None
-
 
         emission_date = cls._format_date(fields[10])
         total_value_cents = cls._convert_to_cents(fields[12])
@@ -77,8 +76,9 @@ class SpedParser:
 
     @classmethod
     def parse_sped_content(cls, sped_content: str, sped_batch: list) -> None:
-        parsed_0000: Optional[list] = None
-        sped_type: bool = False #False->SPED_COFINS True->SPED_FISCAL
+        parsed_0000: Optional[dict] = None
+        record_0000_number_fields: Optional[int] = None
+        sped_type: bool = False  # False -> SPED_COFINS (>=18 campos) | True -> SPED_FISCAL (<18 campos)
 
         lines = sped_content.splitlines()
 
@@ -87,30 +87,40 @@ class SpedParser:
             if not line:
                 continue
 
-            if line.startswith(f"{cls.RECORD_DELIMITER}0000{cls.RECORD_DELIMITER}"):
-                parsed_0000 = cls._parse_record_0000(line)
-                if parsed_0000:
-                    record_0000_number_fields = parsed_0000.get("fields")
-                    sped_type = False if record_0000_number_fields >= 18 else True
-                    cls.company_name = parsed_0000.get("company_name")
+            fields = line.split(cls.RECORD_DELIMITER)
+            if len(fields) < 2:
+                continue
 
-            elif line.startswith(f"{cls.RECORD_DELIMITER}C100{cls.RECORD_DELIMITER}"):
-                parsed_c100 = cls._parse_record_c100(line)
-                
-                if not parsed_c100 or not parsed_0000 or record_0000_number_fields is None:
+            match fields[1]:
+                case "0000":
+                    parsed_0000 = cls._parse_record_0000(line)
+                    if parsed_0000:
+                        record_0000_number_fields = parsed_0000.get("fields")
+                        if record_0000_number_fields is not None:
+                            sped_type = False if record_0000_number_fields >= 18 else True
+
+                        cls.company_name = parsed_0000.get("company_name")
+
+                case "C100":
+                    parsed_c100 = cls._parse_record_c100(line)
+
+                    if not parsed_c100 or not parsed_0000 or record_0000_number_fields is None:
+                        continue
+
+                    record_tuple = (
+                        parsed_c100.get("access_key"),
+                        parsed_c100.get("value"),
+                        sped_type,
+                        parsed_c100.get("emission_date"),
+                    )
+
+                    sped_batch.append(record_tuple)
+
+                case _:
                     continue
 
-                record_tuple = (
-                    parsed_c100.get("access_key"),
-                    parsed_c100.get("value"),
-                    sped_type,
-                    parsed_c100.get("emission_date"),
-                )
-
-                sped_batch.append(record_tuple)
-
     @classmethod
-    def get_company_name(cls):
+    def get_company_name(cls) -> str:
         if cls.company_name:
             return cls.company_name
-        raise BrokenPipeError(f"VERIFIQUE A PIPELINE: NOME DA EMPRESA NÃO ENCONTRADO")
+        raise BrokenPipeError("VERIFIQUE A PIPELINE: NOME DA EMPRESA NÃO ENCONTRADO")
