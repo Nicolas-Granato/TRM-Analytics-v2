@@ -1,0 +1,5 @@
+AUDIT_SINTEGRA_QUERY = """
+"""
+
+AUDIT_SPED_QUERY = """
+"""
