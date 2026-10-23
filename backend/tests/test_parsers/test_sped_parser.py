@@ -1,5 +1,5 @@
 import pytest
-from backend.src.parsers.sped_parser import SpedParser
+from src.parsers.sped_parser import SpedParser
 
 VALID_KEY = "35230900000000000191550010000000011000000001"
 

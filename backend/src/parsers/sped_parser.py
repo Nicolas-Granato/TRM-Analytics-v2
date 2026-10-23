@@ -1,4 +1,4 @@
-from typing import Optional, List, Tuple
+from typing import Optional
 
 class SpedParser:
 
@@ -33,10 +33,10 @@ class SpedParser:
     @classmethod
     def _parse_record_0000(cls, line_0000: str) -> Optional[dict]:
         fields = line_0000.split(cls.RECORD_DELIMITER)
-        if len(fields) < 4 or fields[1] != "0000":
+        if len(fields) < 5 or fields[1] != "0000":
             return None
 
-        company_name = fields[6].strip() if len(fields) > 6 else cls.FALLBACK_COMPANY_NAME
+        company_name = fields[6].strip() if len(fields) > 6 and fields[6].strip() else cls.FALLBACK_COMPANY_NAME
 
         return {
             "fields": len(fields),
@@ -54,19 +54,25 @@ class SpedParser:
         if operation_type != cls.OPERATION_TYPE_OUTGOING:
             return None
 
-        document_status = fields[6].strip() or "00"
+        standard_key = fields[9].strip() if len(fields) > 9 else ""
+        shifted_key = fields[10].strip() if len(fields) > 10 else ""
+        if len(standard_key) == cls.ACCESS_KEY_LENGTH:
+            key_index, status_index, date_index, value_index, environment_indices = 9, 6, 10, 12, (26,)
+        elif len(shifted_key) == cls.ACCESS_KEY_LENGTH:
+            key_index, status_index, date_index, value_index, environment_indices = 10, 7, 11, 13, (27, 26)
+        else:
+            return None
+
+        document_status = fields[status_index].strip() or "00"
         if document_status == cls.DOCUMENT_STATUS_CANCELLED:
             return None
 
-        if len(fields) > 26 and fields[26].strip() == cls.TP_AMB_HOMOLOGATION:
+        if any(len(fields) > idx and fields[idx].strip() == cls.TP_AMB_HOMOLOGATION for idx in environment_indices):
             return None
 
-        access_key = fields[9].strip()
-        if len(access_key) != cls.ACCESS_KEY_LENGTH:
-            return None
-
-        emission_date = cls._format_date(fields[10])
-        total_value_cents = cls._convert_to_cents(fields[12])
+        access_key = fields[key_index].strip()
+        emission_date = cls._format_date(fields[date_index])
+        total_value_cents = cls._convert_to_cents(fields[value_index])
 
         return {
             "access_key": access_key,
