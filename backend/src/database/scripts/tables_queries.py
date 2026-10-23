@@ -30,18 +30,3 @@ CREATE TEMP TABLE IF NOT EXISTS sintegra (
     PRIMARY KEY (cnpj_issuer, nfe_series, nfe_number)
 );
 """
-
-AUDIT_SINTEGRA_QUERY = """
-"""
-
-AUDIT_SPED_QUERY = """
-"""
-
-SINTEGRA_METRICS = """
-"""
-
-SPED_METRICS = """
-"""
-
-XML_METRICS = """
-"""
