@@ -44,8 +44,8 @@ class DuckDBSession:
             self._close_connection()
             raise RuntimeError(f"Erro ao inicializar o banco de dados: {e}") from e
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         self._setup_database
 
-    def __exit__(self, exc_type, exc, tb):
+    def __exit__(self, exc_type, exc, tb) -> None:
         self._close_connection
