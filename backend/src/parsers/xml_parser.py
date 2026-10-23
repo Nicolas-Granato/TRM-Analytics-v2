@@ -27,7 +27,7 @@ class XmlParser:
         return ""
 
     @classmethod
-    def parse_xml(cls, xml_bytes: bytes) -> Optional[tuple[str, str, int, str, str, str, str, str]]:
+    def parse_xml(cls, xml_bytes: bytes, xmls_batch: list) -> Optional[tuple[str, str, int, str, str, str, str, str]]:
         try:
             root = ET.fromstring(xml_bytes)
 
@@ -51,7 +51,9 @@ class XmlParser:
             vNF_str = cls.get_tag_text(root, "vNF", default="0.00")
             vNF_centavos = int(round(float(vNF_str) * 100))
 
-            return (chNFe, cnpj, vNF_centavos, serie, nNF, dhEmi, tpAmb, tpNF)
+            xml = (chNFe, cnpj, vNF_centavos, serie, nNF, dhEmi, tpAmb, tpNF)
+
+            xmls_batch.append(xml)
 
         except (ET.ParseError, ValueError, Exception):
             return None
