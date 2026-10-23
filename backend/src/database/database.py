@@ -1,23 +1,18 @@
 import duckdb
-from backend.src.database.queries import CREATE_TEMP_TABLES
-from typing import Optional
-from importlib.resources import files
+from typing import Optional, Sequence
 
 class DuckDBSession:
 
-    def __init__(self, memory_limits: str = "200MB"):
-        self.memory_limits = memory_limits
+    def __init__(
+        self, 
+        memory_limit: str = "200MB", 
+        ddl_scripts: Optional[Sequence[str]] = None
+    ):
+        self.memory_limit = memory_limit
+        self._ddl_scripts = ddl_scripts or []
         self._conn: Optional[duckdb.DuckDBPyConnection] = None
 
-    @property
-    def get_conn(self) -> duckdb.DuckDBPyConnection:
-        if self._conn is None:
-            raise RuntimeError(
-                "A conexão com o banco não está ativa. Utilize a classe dentro de um bloco 'with'."
-            )
-        return self._conn
-
-    def _close_connection(self):
+    def _close_connection(self) -> None:
         if self._conn:
             try:
                 self._conn.close()
@@ -29,12 +24,12 @@ class DuckDBSession:
     def _setup_database(self) -> None:
         try:
             self._conn = duckdb.connect(":memory:")
-            self._conn.execute(f"SET memory_limit = '{self.memory_limits}';")
+            self._conn.execute(f"SET memory_limit = '{self.memory_limit}';")
             self._conn.execute("SET threads = 1;")
 
-            if CREATE_TEMP_TABLES:
-                self._conn.execute(CREATE_TEMP_TABLES)
-
+            for script in self._ddl_scripts:
+                if script and script.strip():
+                    self._conn.execute(script)
 
         except (duckdb.ParserException, duckdb.Error) as e:
             self._close_connection()
@@ -44,8 +39,17 @@ class DuckDBSession:
             self._close_connection()
             raise RuntimeError(f"Erro ao inicializar o banco de dados: {e}") from e
 
-    def __enter__(self) -> None:
-        self._setup_database
+    def execute_SQL(self, sql: str, parameters: Optional[tuple] = None) -> None:
+        if self._conn:
+            try:
+                self._conn.execute(sql, parameters)
+            except Exception as e:
+                self._close_connection()
+                raise RuntimeError(f"Erro ao executar a query no banco de dados: {e}") from e
 
-    def __exit__(self, exc_type, exc, tb) -> None:
-        self._close_connection
+    def __enter__(self) -> "DuckDBSession":
+        self._setup_database()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self._close_connection()
