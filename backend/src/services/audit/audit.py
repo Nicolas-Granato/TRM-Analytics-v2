@@ -31,13 +31,13 @@ from src.parsers.sped_parser import SpedParser
 from src.parsers.xml_parser import XmlParser
 
 
-class Audit:
+class AuditPipelineService:
 
     def __init__(
         self,
         zip_files: bytes,
-        fiscal_file_bytes: Union[str, bytes],
-        fiscal_files_bytes_2: Optional[Union[str, bytes]] = None,
+        fiscal_file_bytes: bytes,
+        fiscal_files_bytes_2: Optional[bytes] = None,
         is_sped: bool = True,
     ):
         self._zip_files = zip_files
@@ -116,17 +116,14 @@ class Audit:
         self.ddl_scripts.append(CREATE_TEMP_TABLE_SINTEGRA)
 
     def run_audit(self) -> Dict[str, Any]:
-        if not self._zip_files:
-            raise ValueError("Arquivo ZIP de XMLs não fornecido ou vazio.")
-
         self._parse_xml_zip()
         self._parse_sped() if self._is_sped else self._parse_sintegra()
 
         with DuckDBSession(self.ddl_scripts) as db:
-            if self._xml_batch:
+            if len(self._xml_batch):
                 db.executemany_sql(INSERT_XML, self._xml_batch)
 
-            if self._fiscal_batch:
+            if len(self._fiscal_batch):
                 insert_fiscal_archive = INSERT_SPED if self._is_sped else INSERT_SINTEGRA
                 db.executemany_sql(insert_fiscal_archive, self._fiscal_batch)
 

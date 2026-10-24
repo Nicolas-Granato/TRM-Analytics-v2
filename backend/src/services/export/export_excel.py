@@ -38,13 +38,12 @@ class ExcelExport:
         buffer = io.BytesIO()
         wb.save(buffer)
         buffer.seek(0)
+        
+        wb.close()
 
         return buffer
 
     def export_dataframe_to_file(self, df_results: pd.DataFrame, output_xlsx_path: Union[str, Path]) -> None:
-        """
-        Gera a planilha e salva diretamente em um arquivo físico no disco.
-        """
         path = Path(output_xlsx_path)
         path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -149,8 +148,9 @@ class ExcelExport:
     def _apply_table_formatting(self, ws, last_col_letter: str, last_data_row: int) -> None:
         tab_range = f"A3:{last_col_letter}{last_data_row}"
         tab = Table(displayName="TabelaAuditoriaTRM", ref=tab_range)
+        
         tab.tableStyleInfo = TableStyleInfo(
-            name="TableStyleLight1",
+            name=None,
             showFirstColumn=False,
             showLastColumn=False,
             showRowStripes=False,
@@ -170,4 +170,3 @@ class ExcelExport:
                     max_len = len(val_str)
 
             ws.column_dimensions[col_letter].width = max(max_len + 4, 14)
-    
