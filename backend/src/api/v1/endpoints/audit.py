@@ -10,7 +10,7 @@ router = APIRouter()
     status_code=status.HTTP_200_OK,
     response_model=dict[str, Any],
     summary="Executa a auditoria fiscal",
-    description="Recebe o arquivo .ZIP com os XMLs e os arquivos fiscais (SPED/Sintegra) para processamento stateless em memória."
+    description="Recebe o arquivo .ZIP com os XMLs e os arquivos fiscais (SPED/Sintegra) para processamento em memória."
 )
 async def run_audit(
     zip_files: UploadFile = File(
@@ -22,11 +22,12 @@ async def run_audit(
         description="Arquivo fiscal principal (SPED Fiscal ou Sintegra)."
     ),
     fiscal_file_2: Optional[UploadFile] = File(
+        default=None,
         description="Arquivo fiscal SPED Cofins, sendo opcional para o cruzamento."
     ),
     is_sped: bool = Form(
-        True,
-        description="O front-end por meio de um slide vai passar True, caso seja para realizar uma auditoria SPED, e False caso seja uma auditoria Sintegra."
+        default=True,
+        description="O front-end passará True para auditoria SPED e False para Sintegra."
     )
 ):
     try:
