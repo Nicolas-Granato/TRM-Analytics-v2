@@ -8,4 +8,6 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+      - FORCE_COLOR=1 
+      - COLORTERM=truecolor
     restart: always
