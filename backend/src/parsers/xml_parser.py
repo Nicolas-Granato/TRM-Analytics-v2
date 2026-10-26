@@ -1,5 +1,6 @@
 import xml.etree.ElementTree as ET
-from typing import Optional
+from typing import Optional, Tuple
+from loguru import logger
 
 class XmlParser:
 
@@ -8,12 +9,25 @@ class XmlParser:
     OPERATION_TYPE_OUTGOING = "1"
 
     @staticmethod
-    def get_tag_text(root: ET.Element, tag_name: str, default: str = "") -> str:
-        elem = root.find(f".//{{*}}{tag_name}")
-        return elem.text.strip() if (elem is not None and elem.text) else default
+    def _find_node(parent: ET.Element, tag_name: str) -> Optional[ET.Element]:
+        """Busca um nó ignorando completamente o namespace da SEFAZ."""
+        for elem in parent.iter():
+            if elem.tag.endswith(tag_name):
+                return elem
+        return None
+
+    @staticmethod
+    def get_tag_text(parent: Optional[ET.Element], tag_name: str, default: str = "") -> str:
+        if parent is None:
+            return default
+        for elem in parent.iter():
+            if elem.tag.endswith(tag_name) and elem.text:
+                return elem.text.strip()
+        return default
 
     @classmethod
     def _extract_access_key(cls, root: ET.Element) -> str:
+        """Extrai a chave de acesso de 44 dígitos."""
         chNFe = cls.get_tag_text(root, "chNFe")
         if len(chNFe) == cls.ACCESS_KEY_LENGTH and chNFe.isdigit():
             return chNFe
@@ -27,33 +41,46 @@ class XmlParser:
         return ""
 
     @classmethod
-    def parse_xml(cls, xml_bytes: bytes, xmls_batch: list) -> Optional[tuple[str, str, int, str, str, str, str, str]]:
+    def parse_xml(cls, xml_bytes: bytes, xmls_batch: list) -> None:
         try:
             root = ET.fromstring(xml_bytes)
 
-            tpAmb = cls.get_tag_text(root, "tpAmb")
-            if tpAmb != cls.PRODUCTION_ENVIRONMENT_CODE:
-                return None
+            ide_node = cls._find_node(root, "ide")
+            if ide_node is None:
+                return
 
-            tpNF = cls.get_tag_text(root, "tpNF")
+            tpAmb = cls.get_tag_text(ide_node, "tpAmb")
+            if tpAmb != cls.PRODUCTION_ENVIRONMENT_CODE:
+                return
+
+            tpNF = cls.get_tag_text(ide_node, "tpNF")
             if tpNF != cls.OPERATION_TYPE_OUTGOING:
-                return None
+                return
+
+            emit_node = cls._find_node(root, "emit")
+            if emit_node is None:
+                return
+                
+            cnpj_emitente = cls.get_tag_text(emit_node, "CNPJ")
 
             chNFe = cls._extract_access_key(root)
             if len(chNFe) != cls.ACCESS_KEY_LENGTH:
-                return None
+                return
 
-            cnpj = cls.get_tag_text(root, "CNPJ")
-            serie = cls.get_tag_text(root, "serie")
-            nNF = cls.get_tag_text(root, "nNF")
-            dhEmi = cls.get_tag_text(root, "dhEmi")
+            serie = cls.get_tag_text(ide_node, "serie")
+            nNF = cls.get_tag_text(ide_node, "nNF")
+            dhEmi = cls.get_tag_text(ide_node, "dhEmi")
+            
+            formatted_date = dhEmi[:10] if len(dhEmi) >= 10 else "0000-00-00"
 
-            vNF_str = cls.get_tag_text(root, "vNF", default="0.00")
+            total_node = cls._find_node(root, "total")
+            vNF_str = cls.get_tag_text(total_node if total_node is not None else root, "vNF", default="0.00")
             vNF_centavos = int(round(float(vNF_str) * 100))
 
-            xml = (chNFe, cnpj, vNF_centavos, serie, nNF, dhEmi, tpAmb, tpNF)
+            record_tuple = (chNFe, cnpj_emitente, vNF_centavos, serie, nNF, formatted_date)
+            xmls_batch.append(record_tuple)
 
-            xmls_batch.append(xml)
-
-        except (ET.ParseError, ValueError, Exception):
-            return None
+        except ET.ParseError as pe:
+            logger.warning("⚠️ Ignorando XML inválido/corrompido: {}", pe)
+        except Exception as e:
+            logger.error("❌ Erro no parse do XML: {}", e)
