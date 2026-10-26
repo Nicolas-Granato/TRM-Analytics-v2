@@ -1,0 +1,53 @@
+.summary-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  position: relative;
+}
+
+.summary-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  flex: 1;
+}
+
+.summary-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #64748b;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.summary-metrics {
+  display: flex;
+  gap: 40px;
+}
+
+.summary-metrics label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #94a3b8;
+  display: block;
+}
+
+.summary-metrics p {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.audit-check-icon {
+  background-color: #10b981;
+  color: white;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}
