@@ -1,0 +1,36 @@
+.trm-footer {
+  background-color: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  padding: 16px 40px;
+  margin-top: auto;
+}
+
+.trm-footer-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.trm-footer-dev {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.trm-footer-dev a {
+  color: #1d70b8;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.trm-footer-dev a:hover {
+  text-decoration: underline;
+}
+
+.dot {
+  color: #cbd5e1;
+}

@@ -1,0 +1,48 @@
+.trm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 40px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.trm-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.trm-logo {
+  height: 38px;
+  width: auto;
+  object-fit: contain;
+}
+
+.trm-brand-text h1 {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #0f203c;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.trm-brand-text h2 {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #1d70b8;
+  letter-spacing: 0.08em;
+  margin-top: 2px;
+}
+
+.trm-header-link {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0f203c;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.trm-header-link:hover {
+  color: #1d70b8;
+}
