@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   backend:
     build:
@@ -8,6 +10,21 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
-      - FORCE_COLOR=1 
-      - COLORTERM=truecolor
+    volumes:
+      - ./backend:/app
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload --reload-exclude "*.pyc" --reload-exclude "*.tmp" --reload-exclude "__pycache__"
+    restart: always
+
+  frontend:
+    build:
+      context: ./front-end
+      dockerfile: Dockerfile
+    container_name: trm_analytics_frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./front-end:/app
+      - /app/node_modules
     restart: always
