@@ -1,6 +1,7 @@
 import xml.etree.ElementTree as ET
-from typing import Optional, Tuple
-from loguru import logger
+from typing import Optional
+import re
+
 
 class XmlParser:
 
@@ -10,7 +11,6 @@ class XmlParser:
 
     @staticmethod
     def _find_node(parent: ET.Element, tag_name: str) -> Optional[ET.Element]:
-        """Busca um nó ignorando completamente o namespace da SEFAZ."""
         for elem in parent.iter():
             if elem.tag.endswith(tag_name):
                 return elem
@@ -27,7 +27,6 @@ class XmlParser:
 
     @classmethod
     def _extract_access_key(cls, root: ET.Element) -> str:
-        """Extrai a chave de acesso de 44 dígitos."""
         chNFe = cls.get_tag_text(root, "chNFe")
         if len(chNFe) == cls.ACCESS_KEY_LENGTH and chNFe.isdigit():
             return chNFe
@@ -41,7 +40,7 @@ class XmlParser:
         return ""
 
     @classmethod
-    def parse_xml(cls, xml_bytes: bytes, xmls_batch: list) -> None:
+    def parse_xml(cls, xml_bytes: bytes, xmls_batch: list, cnpj_issuer: str) -> None:
         try:
             root = ET.fromstring(xml_bytes)
 
@@ -61,7 +60,11 @@ class XmlParser:
             if emit_node is None:
                 return
                 
-            cnpj_emitente = cls.get_tag_text(emit_node, "CNPJ")
+            cnpj_issuer_xml = re.sub(r"\D", "", cls.get_tag_text(emit_node, "CNPJ"))
+            clean_cnpj_sped = re.sub(r"\D", "", cnpj_issuer)
+
+            if cnpj_issuer_xml != clean_cnpj_sped:
+                return
 
             chNFe = cls._extract_access_key(root)
             if len(chNFe) != cls.ACCESS_KEY_LENGTH:
@@ -77,10 +80,8 @@ class XmlParser:
             vNF_str = cls.get_tag_text(total_node if total_node is not None else root, "vNF", default="0.00")
             vNF_centavos = int(round(float(vNF_str) * 100))
 
-            record_tuple = (chNFe, cnpj_emitente, vNF_centavos, serie, nNF, formatted_date)
+            record_tuple = (chNFe, cnpj_issuer_xml, vNF_centavos, serie, nNF, formatted_date)
             xmls_batch.append(record_tuple)
 
-        except ET.ParseError as pe:
-            logger.warning("⚠️ Ignorando XML inválido/corrompido: {}", pe)
-        except Exception as e:
-            logger.error("❌ Erro no parse do XML: {}", e)
+        except Exception:
+            return

@@ -1,4 +1,5 @@
 from typing import Optional
+import re
 
 class SpedParser:
 
@@ -7,12 +8,14 @@ class SpedParser:
 
     FALLBACK_COMPANY_NAME = "EMPRESA_NAO_IDENTIFICADA"
     FALLBACK_DATE = "0000-00-00"
+    FALLBACK_CNPJ = "00000000000000"
 
     OPERATION_TYPE_OUTGOING = "1"
     DOCUMENT_STATUS_CANCELLED = "02"
     TP_AMB_HOMOLOGATION = "2"
 
-    company_name: Optional[str] = None
+    company_name: str
+    cnpj_issuer: str
 
     @staticmethod
     def _format_date(raw_date: str) -> str:
@@ -37,10 +40,14 @@ class SpedParser:
             return None
 
         company_name = fields[6].strip() if len(fields) > 6 and fields[6].strip() else cls.FALLBACK_COMPANY_NAME
+        
+        raw_cnpj = fields[7].strip() if len(fields) > 7 and fields[7].strip() else ""
+        cnpj_issuer = re.sub(r"\D", "", raw_cnpj) or cls.FALLBACK_CNPJ
 
         return {
             "fields": len(fields),
             "company_name": company_name,
+            "cnpj_issuer": cnpj_issuer
         }
 
     @classmethod
@@ -106,6 +113,7 @@ class SpedParser:
                             sped_type = False if record_0000_number_fields >= 18 else True
 
                         cls.company_name = parsed_0000.get("company_name")
+                        cls.cnpj_issuer = parsed_0000.get("cnpj_issuer")
 
                 case "C100":
                     parsed_c100 = cls._parse_record_c100(line)
@@ -130,3 +138,9 @@ class SpedParser:
         if cls.company_name:
             return cls.company_name
         raise BrokenPipeError("VERIFIQUE A PIPELINE: NOME DA EMPRESA NÃO ENCONTRADO")
+
+    @classmethod
+    def get_cnpj(cls) -> str:
+        if cls.cnpj_issuer:
+            return cls.cnpj_issuer
+        raise BrokenPipeError("VERIFIQUE A PIPELINE: CNPJ DA EMPRESA NÃO ENCONTRADO")
