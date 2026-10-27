@@ -4,7 +4,7 @@ export function Footer() {
   return (
     <footer className="trm-footer">
       <div className="trm-footer-content">
-        <p>© {new Date().getFullYear()} TRM Sistemas — Automação Comercial e Análises Fiscais</p>
+        <p>© {new Date().getFullYear()} TRM Sistemas — Automação Comercial</p>
         <div className="trm-footer-dev">
           <span>Desenvolvido por <strong>Nícolas Granato</strong></span>
           <a href="https://github.com/Nicolas-Granato" target="_blank" rel="noreferrer">GitHub</a>

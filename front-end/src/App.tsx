@@ -4,7 +4,7 @@ import { Header } from './components/Header/Header';
 import { FiscalTypeSwitch } from './components/FiscalTypeSwitch/FiscalTypeSwitch';
 import { FileContainer, type FiscalArchive } from './components/FileCardContainer/FileCardContainer';
 import { RunAudit } from './components/RunAudit/RunAudit';
-import { ResetAudit } from './components/ResetAudit/ResetAudit'; // Componente de reset
+import { ResetAudit } from './components/ResetAudit/ResetAudit';
 import { SummaryCards } from './components/SummaryCards/SummaryCards';
 import { AuditTable, type AuditItem } from './components/AuditTable/AuditTable';
 import { Footer } from './components/Footer/Footer';
@@ -36,6 +36,7 @@ export function App() {
   const maxXmlFiles = 2;
 
   const handleResetAudit = () => {
+    if (isLoading) return;
     setXmlZipFiles([]);
     setFiscalFiles([]);
     setAuditResults(null);
@@ -43,11 +44,13 @@ export function App() {
   };
 
   const handleToggleFiscalType = (checked: boolean) => {
+    if (isLoading) return;
     setIsSped(checked);
     handleResetAudit();
   };
 
   const handleRunAudit = async () => {
+    if (isLoading) return;
     if (xmlZipFiles.length === 0 || fiscalFiles.length === 0) {
       alert('Por favor, selecione ao menos um pacote XML (.ZIP) e um arquivo fiscal (.TXT).');
       return;
@@ -102,7 +105,7 @@ export function App() {
   };
 
   const handleExportExcel = async () => {
-    if (!auditResults || auditResults.length === 0) return;
+    if (isLoading || !auditResults || auditResults.length === 0) return;
 
     try {
       const payload = {
@@ -132,15 +135,24 @@ export function App() {
       <Header />
 
       <main className="trm-body-container">
-        <div className="trm-toolbar">
+        <div 
+          className="trm-toolbar"
+          style={isLoading ? { opacity: 0.6, pointerEvents: 'none' } : undefined}
+        >
           <div className="trm-section-title">
             <h2>Painel de Auditoria Fiscal</h2>
             <p>Selecione a modalidade e faça o envio dos arquivos</p>
           </div>
-          <FiscalTypeSwitch isSped={isSped} onToggle={handleToggleToggleFiscalType => handleToggleFiscalType(!isSped)} />
+          <FiscalTypeSwitch 
+            isSped={isSped} 
+            onToggle={() => handleToggleFiscalType(!isSped)} 
+          />
         </div>
 
-        <div className="trm-files-row">
+        <div 
+          className="trm-files-row"
+          style={isLoading ? { opacity: 0.6, pointerEvents: 'none' } : undefined}
+        >
           <FileContainer 
             fiscalArchive="Xml" 
             selectedFiles={xmlZipFiles} 
@@ -159,7 +171,7 @@ export function App() {
           <RunAudit 
             onClick={handleRunAudit} 
             isLoading={isLoading} 
-            disabled={xmlZipFiles.length === 0 || fiscalFiles.length === 0}
+            disabled={isLoading || xmlZipFiles.length === 0 || fiscalFiles.length === 0}
           />
 
           {auditResults && (
@@ -179,7 +191,12 @@ export function App() {
         )}
 
         {Array.isArray(auditResults) && (
-          <AuditTable items={auditResults} onExportExcel={handleExportExcel} />
+          <div style={isLoading ? { opacity: 0.6, pointerEvents: 'none' } : undefined}>
+            <AuditTable 
+              items={auditResults} 
+              onExportExcel={handleExportExcel} 
+            />
+          </div>
         )}
       </main>
 
