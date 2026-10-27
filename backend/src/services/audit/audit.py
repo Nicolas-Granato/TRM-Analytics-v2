@@ -35,7 +35,7 @@ from src.parsers.xml_parser import XmlParser
 
 class AuditPipelineService:
 
-    CANCEL_EVENT = "Canc"
+    CANCEL_EVENTS = {"canc"}
 
     def __init__(
         self,
@@ -106,13 +106,15 @@ class AuditPipelineService:
 
         with zipfile.ZipFile(io.BytesIO(zip_files)) as zf:
             for file_info in zf.infolist():
-                if self.CANCEL_EVENT and self.CANCEL_EVENT.lower() in file_info.filename.lower():
+                filename_lower = file_info.filename.lower()
+                
+                if any(event in filename_lower for event in self.CANCEL_EVENTS):
                     numeros = re.findall(r"\d{44}", file_info.filename)
                     if numeros:
                         self._event_canc.append((numeros[0],))
                     continue
 
-                if file_info.filename.lower().endswith(".xml") and not file_info.is_dir():
+                if filename_lower.endswith(".xml") and not file_info.is_dir():
                     with zf.open(file_info) as xml_file:
                         xml_bytes = xml_file.read()
                         XmlParser.parse_xml(xml_bytes, self._xml_batch, self._cnpj_issuer)
@@ -139,6 +141,7 @@ class AuditPipelineService:
     def _parse_sintegra(self) -> None:
         sintegra_text = self._fiscal_file_bytes.decode("latin-1") if isinstance(self._fiscal_file_bytes, bytes) else self._fiscal_file_bytes
         SintegraParser.parse_sintegra(sintegra_text, self._fiscal_batch)
+        self._cnpj_issuer = SintegraParser.get_cnpj()
         
         self.ddl_scripts.append(CREATE_TEMP_TABLE_SINTEGRA)
 

@@ -1,5 +1,6 @@
 from typing import Optional, Any
 
+
 class SintegraParser:
     DIRECTION_TYPE = {
         "T": "ENTRADA",
@@ -9,10 +10,8 @@ class SintegraParser:
     STATUS_CODE_CANCELLED = ("C", "S", "X", "2", "4")
 
     FALLBACK_COMPANY_NAME = "EMPRESA_NAO_IDENTIFICADA"
-    FALLBACK_DATE = "0000-00-00"
-
-    COMPLETE_SERIES = "000000"
-    COMPLETE_NUMBER = "000"
+    FALLBACK_DATE = "1970-01-01"
+    FALLBACK_CNPJ = "00000000000000"
 
     company_name: Optional[str] = None
     company_cnpj: Optional[str] = None
@@ -22,7 +21,8 @@ class SintegraParser:
         raw_date = raw_date.strip()
         if len(raw_date) == 8 and raw_date.isdigit():
             year, month, day = raw_date[0:4], raw_date[4:6], raw_date[6:8]
-            return f"{year}-{month}-{day}"
+            if 1 <= int(month) <= 12 and 1 <= int(day) <= 31 and int(year) >= 1900:
+                return f"{year}-{month}-{day}"
         return cls.FALLBACK_DATE
 
     @classmethod
@@ -31,7 +31,7 @@ class SintegraParser:
             return None
 
         company_name = line_10[30:65].strip() or cls.FALLBACK_COMPANY_NAME
-        company_cnpj = line_10[2:16].strip()
+        company_cnpj = line_10[2:16].strip().zfill(14)
 
         return {
             "company_name": company_name,
@@ -51,20 +51,23 @@ class SintegraParser:
         if status_code in cls.STATUS_CODE_CANCELLED:
             return None
 
-        cnpj_issuer = line_50[2:16].strip()
+        cnpj_issuer = line_50[2:16].strip().zfill(14)
         emission_date = line_50[30:38].strip()
+        nfe_model = line_50[40:42].strip() or "55"
         nfe_series = line_50[42:45].strip()
         nfe_number = line_50[45:51].strip()
 
         return {
             "cnpj_issuer": cnpj_issuer,
+            "nfe_model": nfe_model,
             "nfe_series": nfe_series,
             "nfe_number": nfe_number,
+            "value": 0,
             "emission_date": cls._format_date(emission_date)
         }
 
     @classmethod
-    def _parse_record_54(cls, line_54: str, valid_50_keys: Optional[set] = None) -> Optional[dict]:
+    def _parse_record_54(cls, line_54: str) -> Optional[dict]:
         if len(line_54) < 126 or not line_54.startswith("54"):
             return None
 
@@ -72,9 +75,6 @@ class SintegraParser:
         document_number = line_54[21:27].strip()
 
         if not (series_number and document_number):
-            return None
-
-        if valid_50_keys is not None and (series_number, document_number) not in valid_50_keys:
             return None
 
         raw_value = line_54[62:74].strip()
@@ -88,30 +88,40 @@ class SintegraParser:
 
     @classmethod
     def _parse_record_61(cls, line_61: str) -> Optional[dict]:
-        if len(line_61) < 126 or not line_61.startswith("61"):
+        if len(line_61) < 126 or line_61[:2] != "61" or line_61.startswith("61R"):
             return None
+
+        raw_emission_date = line_61[30:38].strip()
+        nfe_model = line_61[38:40].strip() or "65"
+        nfe_series = line_61[40:43].strip() or "000"
+        
+        raw_ord_initial = line_61[45:51].strip()
+        nfe_number = raw_ord_initial if raw_ord_initial and raw_ord_initial != "000000" else raw_emission_date[2:8]
 
         raw_value = line_61[57:70].strip()
         value = int(raw_value) if raw_value.isdigit() else 0
 
-        emission_date = cls._format_date(line_61[30:38])
-
         return {
             "value": value,
-            "emission_date": emission_date
+            "nfe_model": nfe_model,
+            "nfe_series": nfe_series,
+            "nfe_number": nfe_number,
+            "emission_date": cls._format_date(raw_emission_date)
         }
 
     @classmethod
     def parse_sintegra(cls, sintegra_content: str, sintegra_batch: list) -> None:
         parsed_10: Optional[dict] = None
         parsed_50_records: dict[tuple[str, str], dict[str, Any]] = {}
-        records: list[dict] = []
+        raw_54_lines: list[str] = []
+        parsed_61_records: dict[tuple[str, str, str, str], tuple] = {}
+        records_tuples: list[tuple] = []
 
         lines = sintegra_content.splitlines()
 
         for line in lines:
-            line = line.rstrip("\\r\\n")
-            if not line.strip():
+            line = line.rstrip("\r\n")
+            if not line.strip() or line.startswith("61R"):
                 continue
 
             match line[:2]:
@@ -130,55 +140,77 @@ class SintegraParser:
                     nfe_number = parsed_50.get("nfe_number", "")
                     key = (nfe_series, nfe_number)
 
-                    document_data = {
+                    parsed_50_records[key] = {
                         "cnpj_issuer": parsed_50.get("cnpj_issuer"),
                         "value": 0,
-                        "nfe_model": "55",
+                        "nfe_model": parsed_50.get("nfe_model", "55"),
                         "nfe_series": nfe_series,
                         "nfe_number": nfe_number,
                         "emission_date": parsed_50.get("emission_date")
                     }
 
-                    parsed_50_records[key] = document_data
-
                 case "54":
-                    parsed_54 = cls._parse_record_54(line, set(parsed_50_records.keys()))
-                    if not parsed_54:
-                        continue
-
-                    series = parsed_54.get("series_number", "")
-                    document = parsed_54.get("document_number", "")
-                    value = parsed_54.get("product_value", 0)
-
-                    key = (series, document)
-
-                    if key in parsed_50_records:
-                        parsed_50_records[key]["value"] += value
+                    raw_54_lines.append(line)
 
                 case "61":
                     parsed_61 = cls._parse_record_61(line)
                     if not parsed_61:
                         continue
 
-                    record_61_data = {
-                        "cnpj_issuer": cls.company_cnpj,
-                        "value": parsed_61.get("value"),
-                        "nfe_model": "65",
-                        "nfe_series": cls.COMPLETE_SERIES,
-                        "nfe_number": cls.COMPLETE_NUMBER,
-                        "emission_date": parsed_61.get("emission_date")
-                    }
-                    records.append(record_61_data)
+                    key_61 = (
+                        parsed_61.get("nfe_model", "65"),
+                        parsed_61.get("nfe_series", "000"),
+                        parsed_61.get("nfe_number", "000000"),
+                        parsed_61.get("emission_date", cls.FALLBACK_DATE)
+                    )
+
+                    parsed_61_records[key_61] = (
+                        cls.company_cnpj or cls.FALLBACK_CNPJ,
+                        parsed_61.get("value", 0),
+                        parsed_61.get("nfe_model", "65"),
+                        parsed_61.get("nfe_series", "000"),
+                        parsed_61.get("nfe_number", "000000"),
+                        parsed_61.get("emission_date", cls.FALLBACK_DATE)
+                    )
 
                 case _:
                     continue
 
-        records.extend(parsed_50_records.values())
+        valid_50_keys = set(parsed_50_records.keys())
+        for line_54 in raw_54_lines:
+            parsed_54 = cls._parse_record_54(line_54)
+            if not parsed_54:
+                continue
 
-        sintegra_batch.extend(records)
+            series = parsed_54.get("series_number", "")
+            document = parsed_54.get("document_number", "")
+            value = parsed_54.get("product_value", 0)
+            key = (series, document)
+
+            if key in valid_50_keys:
+                parsed_50_records[key]["value"] += value
+
+        records_tuples.extend(parsed_61_records.values())
+
+        for doc in parsed_50_records.values():
+            doc_tuple = (
+                doc.get("cnpj_issuer") or cls.company_cnpj or cls.FALLBACK_CNPJ,
+                doc.get("value", 0),
+                doc.get("nfe_model", "55"),
+                doc.get("nfe_series", ""),
+                doc.get("nfe_number", ""),
+                doc.get("emission_date", cls.FALLBACK_DATE)
+            )
+            records_tuples.append(doc_tuple)
+
+        sintegra_batch.extend(records_tuples)
 
     @classmethod
     def get_company_name(cls) -> str:
         if cls.company_name:
             return cls.company_name
         raise BrokenPipeError("VERIFIQUE A PIPELINE: NOME DA EMPRESA NÃO ENCONTRADO")
+
+    @classmethod
+    def get_cnpj(cls) -> str:
+        return getattr(cls, 'company_cnpj', None) or cls.FALLBACK_CNPJ
