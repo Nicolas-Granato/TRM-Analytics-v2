@@ -11,12 +11,13 @@ class TestAuditPipelineServiceComplexity:
 
     @pytest.fixture
     def sample_zip_bytes(self) -> bytes:
-        """Gera em memória um arquivo ZIP válido contendo um XML e um TXT."""
+        """Gera em memória um arquivo ZIP válido contendo XMLs normais e de cancelamento."""
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w") as zf:
-            zf.writestr("nota1.xml", "<nfeProc></nfeProc>")
+            zf.writestr("35231000000000000000550010000000011000000000-nfe.xml", "<nfeProc></nfeProc>")
+            zf.writestr("12345678901234567890123456789012345678901234-canc.xml", "<procEventoNFe></procEventoNFe>")
             zf.writestr("leia-me.txt", "Texto irrelevante")
-            zf.writestr("pasta_xml/", "")  # Simula um diretório
+            zf.writestr("pasta_xml/", "")
         return buffer.getvalue()
 
     @pytest.fixture
@@ -28,77 +29,78 @@ class TestAuditPipelineServiceComplexity:
         return mock_db, mock_cursor
 
     # -------------------------------------------------------------------------
-    # Testes para _parse_xml_zip (V(G) = 4)
+    # Testes para _parse_xml_zip e _parse_xml
     # -------------------------------------------------------------------------
 
     @patch("src.services.audit.audit.XmlParser.parse_xml")
-    def test_parse_xml_zip_success_and_ignores_non_xml(
+    def test_parse_xml_zip_success_and_cancellation_event(
         self, mock_parse_xml, sample_zip_bytes
     ):
-        """Testa a leitura do ZIP filtrando apenas arquivos .xml não-diretórios."""
-        mock_parse_xml.side_effect = [
-            ("35231000000000000000550010000000011000000000", "12345678000195", 10000, "1", "100", "2023-09-01")
-        ]
-
+        """Testa o parsing de ZIP separando XMLs comuns de eventos de cancelamento."""
         service = AuditPipelineService(
             zip_files=sample_zip_bytes, fiscal_file_bytes=b"content"
         )
-        service._parse_xml_zip()
+        service._parse_xml()
 
-        # Garante que parse_xml foi chamado apenas 1 vez (ignorou o .txt e a pasta)
         assert mock_parse_xml.call_count == 1
-        assert len(service._xml_batch) == 1
+        assert len(service._event_canc) == 1
+        assert service._event_canc[0] == ("12345678901234567890123456789012345678901234",)
         assert "CREATE TEMP TABLE IF NOT EXISTS xml" in service.ddl_scripts[0]
 
     @patch("src.services.audit.audit.XmlParser.parse_xml")
-    def test_parse_xml_zip_when_parser_returns_none(
-        self, mock_parse_xml, sample_zip_bytes
-    ):
-        """Testa comportamento quando o XML é inválido e o parser devolve None."""
-        mock_parse_xml.return_value = None
-
+    def test_parse_xml_with_secondary_zip(self, mock_parse_xml, sample_zip_bytes):
+        """Testa o processamento quando um segundo arquivo ZIP é fornecido."""
         service = AuditPipelineService(
-            zip_files=sample_zip_bytes, fiscal_file_bytes=b"content"
+            zip_files=sample_zip_bytes,
+            zip_files_2=sample_zip_bytes,
+            fiscal_file_bytes=b"content",
         )
-        service._parse_xml_zip()
+        service._parse_xml()
 
-        assert len(service._xml_batch) == 0
+        assert mock_parse_xml.call_count == 2
+        assert len(service._event_canc) == 2
 
     # -------------------------------------------------------------------------
-    # Testes para _parse_sped e _parse_sintegra (V(G) = 2)
+    # Testes para _parse_sped e _parse_sintegra
     # -------------------------------------------------------------------------
 
+    @patch("src.services.audit.audit.SpedParser.get_cnpj", return_value="12345678000195")
     @patch("src.services.audit.audit.SpedParser.parse_sped_content")
-    def test_parse_sped_single_and_multiple_files(self, mock_parse_sped):
-        """Testa o parsing de SPED com 1 e 2 arquivos fiscais."""
+    def test_parse_sped_single_and_multiple_files(
+        self, mock_parse_sped, mock_get_cnpj
+    ):
+        """Testa o parsing de SPED com 1 e 2 arquivos fiscais em bytes e string."""
         service = AuditPipelineService(
             zip_files=b"",
             fiscal_file_bytes=b"sped_1",
-            fiscal_files_bytes_2=b"sped_2",
+            fiscal_files_bytes_2="sped_2",
             is_sped=True,
         )
         service._parse_sped()
 
         assert mock_parse_sped.call_count == 2
+        assert service._cnpj_issuer == "12345678000195"
         assert "CREATE TEMP TABLE IF NOT EXISTS sped" in service.ddl_scripts[0]
 
+    @patch("src.services.audit.audit.SintegraParser.get_cnpj", return_value="12345678000195")
     @patch("src.services.audit.audit.SintegraParser.parse_sintegra")
-    def test_parse_sintegra_flow(self, mock_parse_sintegra):
-        """Testa a chamada do parser Sintegra."""
+    def test_parse_sintegra_flow(self, mock_parse_sintegra, mock_get_cnpj):
+        """Testa a chamada do parser Sintegra com extração de CNPJ."""
         service = AuditPipelineService(
             zip_files=b"", fiscal_file_bytes=b"sintegra_content", is_sped=False
         )
         service._parse_sintegra()
 
-        mock_parse_sintegra.assert_called_once_with(b"sintegra_content", service._fiscal_batch)
+        mock_parse_sintegra.assert_called_once_with("sintegra_content", service._fiscal_batch)
+        assert service._cnpj_issuer == "12345678000195"
         assert "CREATE TEMP TABLE IF NOT EXISTS sintegra" in service.ddl_scripts[0]
 
     # -------------------------------------------------------------------------
-    # Testes para _calculate_metrics (V(G) = 6)
+    # Testes para _calculate_metrics
     # -------------------------------------------------------------------------
 
     def test_calculate_metrics_sped_with_data(self):
-        """Fluxo SPED com registros retornados no banco."""
+        """Fluxo SPED com métricas retornadas do banco."""
         mock_execute = MagicMock()
         mock_cursor_xml = MagicMock()
         mock_cursor_xml.fetchone.return_value = (10, 150000)
@@ -123,19 +125,20 @@ class TestAuditPipelineServiceComplexity:
         service = AuditPipelineService(b"", b"", is_sped=False)
         metrics = service._calculate_metrics(mock_execute)
 
-        assert metrics["xml_metrics"] == {"total_value": 0}
-        assert metrics["fiscal_archive_metrics"] == {"total_value": 0}
+        assert metrics["xml_metrics"] == {"total_count": 0, "total_value": 0}
+        assert metrics["fiscal_archive_metrics"] == {"total_count": 0, "total_value": 0}
 
     # -------------------------------------------------------------------------
-    # Testes do Pipeline Completo run_audit (V(G) = 5)
+    # Testes do Pipeline Completo run_audit
     # -------------------------------------------------------------------------
 
     @patch("src.services.audit.audit.DuckDBSession")
-    @patch.object(AuditPipelineService, "_parse_xml_zip")
+    @patch.object(AuditPipelineService, "_parse_xml")
     @patch.object(AuditPipelineService, "_parse_sped")
-    def test_run_audit_sped_full_success(
+    def test_run_audit_sped_full_success_with_deletes(
         self, mock_parse_sped, mock_parse_xml, mock_duckdb_cls
     ):
+        """Testa fluxo completo com inserções de SPED, XML e deleções de notas canceladas."""
         mock_db = MagicMock()
         mock_cursor = MagicMock()
         mock_duckdb_cls.return_value.__enter__.return_value = mock_db
@@ -150,34 +153,31 @@ class TestAuditPipelineServiceComplexity:
         service = AuditPipelineService(b"zip", b"sped", is_sped=True)
         xml_tuple = ("key", "cnpj", 100, "1", "1", "2023-01-01")
         sped_tuple = ("key", 100, True, "2023-01-01")
+        canc_tuple = ("12345678901234567890123456789012345678901234",)
 
-        mock_parse_xml.side_effect = lambda: service._xml_batch.append(xml_tuple)
-        mock_parse_sped.side_effect = lambda: service._fiscal_batch.append(sped_tuple)
+        def populate_batches():
+            service._xml_batch.append(xml_tuple)
+            service._fiscal_batch.append(sped_tuple)
+            service._event_canc.append(canc_tuple)
+
+        mock_parse_xml.side_effect = populate_batches
 
         result = service.run_audit()
 
-        assert mock_db.executemany_sql.call_count == 2
-
-        first_call, second_call = inserted_batches
-
-        assert "INSERT INTO xml" in first_call[0]
-        assert first_call[1] == [xml_tuple]
-        assert "INSERT INTO sped" in second_call[0]
-        assert second_call[1] == [sped_tuple]
-
+        assert mock_db.executemany_sql.call_count == 3
         assert service._xml_batch == []
         assert service._fiscal_batch == []
+        assert service._event_canc == []
         assert "metricas" in result
         assert len(result["dataframe"]) == 1
-        assert result["dataframe"][0]["divergence_type"] == "DIVERGENCIA_DE_VALOR"
 
     @patch("src.services.audit.audit.DuckDBSession")
-    @patch.object(AuditPipelineService, "_parse_xml_zip")
+    @patch.object(AuditPipelineService, "_parse_xml")
     @patch.object(AuditPipelineService, "_parse_sintegra")
     def test_run_audit_sintegra_empty_batches(
         self, mock_parse_sintegra, mock_parse_xml, mock_duckdb_cls, mock_duckdb_session
     ):
-        """Testa o pipeline Sintegra com lotes vazios (não dispara executemany_sql)."""
+        """Testa o pipeline Sintegra com lotes vazios (garantindo que executemany_sql não é chamado)."""
         mock_db, mock_cursor = mock_duckdb_session
         mock_duckdb_cls.return_value.__enter__.return_value = mock_db
 

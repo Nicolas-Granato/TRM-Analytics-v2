@@ -19,13 +19,30 @@ class TestAuditPipelineServiceComplexity:
 
     @patch("src.services.audit.audit.XmlParser.parse_xml")
     def test_parse_xml_zip_success(self, mock_parse_xml, sample_zip_bytes):
-        mock_parse_xml.return_value = ("3523...", "12345678000195", 10000, "1", "100", "2023-09-01")
+        expected_xml = (
+            "35230000000000000191550010000001001000000001",
+            "12345678000195",
+            10000,
+            "001",
+            "000000100",
+            "2023-09-01",
+        )
 
-        service = AuditPipelineService(zip_files=sample_zip_bytes, fiscal_file_bytes=b"content")
-        service._parse_xml_zip()
+        def parse_xml_side_effect(xml_bytes, xmls_batch, cnpj_issuer):
+            xmls_batch.append(expected_xml)
 
-        assert len(service._xml_batch) == 1
-        assert "CREATE TEMP TABLE IF NOT EXISTS xml" in service.ddl_scripts[0]
+        mock_parse_xml.side_effect = parse_xml_side_effect
+
+        service = AuditPipelineService(
+            zip_files=sample_zip_bytes,
+            fiscal_file_bytes=b"content",
+        )
+
+        service._parse_xml_zip(sample_zip_bytes)
+
+        assert service._xml_batch == [expected_xml]
+        mock_parse_xml.assert_called_once()
+
 
     @patch("src.services.audit.audit.DuckDBSession")
     @patch.object(AuditPipelineService, "_parse_xml_zip")

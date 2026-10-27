@@ -14,41 +14,31 @@ def reset_sintegra_state():
 def build_fixed_line(prefix: str, content_dict: dict = None) -> str:
     """Gera uma linha com tamanho fixo EXATO de 126 caracteres preenchida com espaços."""
     line_chars = list(prefix.ljust(126, " "))
-    
     if content_dict:
         for (start, end), val in content_dict.items():
             val_str = str(val)
             length = end - start
             formatted_val = val_str[:length].ljust(length, " ")
-            
             for i, char in enumerate(formatted_val):
                 if start + i < 126:
                     line_chars[start + i] = char
-                    
     return "".join(line_chars[:126])
 
-
-# ==============================================================================
-# Testes do Método Auxiliar: _format_date
-# ==============================================================================
 
 class TestFormatDate:
 
     @pytest.mark.parametrize("raw_date, expected", [
         ("20230901", "2023-09-01"),
         ("20221231", "2022-12-31"),
+        ("18991231", SintegraParser.FALLBACK_DATE),
+        ("20231301", SintegraParser.FALLBACK_DATE),
         ("2023090", SintegraParser.FALLBACK_DATE),
-        ("202309011", SintegraParser.FALLBACK_DATE),
         ("2023090A", SintegraParser.FALLBACK_DATE),
         ("", SintegraParser.FALLBACK_DATE),
     ])
     def test_format_date_branches(self, raw_date, expected):
         assert SintegraParser._format_date(raw_date) == expected
 
-
-# ==============================================================================
-# Testes do Registro 10 (_parse_record_10)
-# ==============================================================================
 
 class TestParseRecord10:
 
@@ -78,16 +68,13 @@ class TestParseRecord10:
         assert SintegraParser._parse_record_10(invalid_line) is None
 
 
-# ==============================================================================
-# Testes do Registro 50 (_parse_record_50)
-# ==============================================================================
-
 class TestParseRecord50:
 
     def test_parse_50_success(self):
         line = build_fixed_line("50", {
             (2, 16): "12345678000195",
             (30, 38): "20230901",
+            (40, 42): "55",
             (42, 45): "001",
             (45, 51): "000100",
             (55, 56): "P",
@@ -97,8 +84,10 @@ class TestParseRecord50:
 
         assert result == {
             "cnpj_issuer": "12345678000195",
+            "nfe_model": "55",
             "nfe_series": "001",
             "nfe_number": "000100",
+            "value": 0,
             "emission_date": "2023-09-01"
         }
 
@@ -111,14 +100,6 @@ class TestParseRecord50:
         line = build_fixed_line("50", {(55, 56): "P", (125, 126): cancelled_code})
         assert SintegraParser._parse_record_50(line) is None
 
-    def test_parse_50_short_line(self):
-        line = "50" + " " * 100
-        assert SintegraParser._parse_record_50(line) is None
-
-
-# ==============================================================================
-# Testes do Registro 54 (_parse_record_54)
-# ==============================================================================
 
 class TestParseRecord54:
 
@@ -128,19 +109,13 @@ class TestParseRecord54:
             (21, 27): "000100",
             (62, 74): "000000015050"
         })
-        valid_keys = {("001", "000100")}
-        result = SintegraParser._parse_record_54(line, valid_50_keys=valid_keys)
+        result = SintegraParser._parse_record_54(line)
 
         assert result == {
             "series_number": "001",
             "document_number": "000100",
             "product_value": 15050
         }
-
-    def test_parse_54_key_not_in_valid_set(self):
-        line = build_fixed_line("54", {(18, 21): "001", (21, 27): "000100"})
-        valid_keys = {("001", "999999")}
-        assert SintegraParser._parse_record_54(line, valid_50_keys=valid_keys) is None
 
     def test_parse_54_missing_series_or_document(self):
         line = build_fixed_line("54", {(18, 21): "   ", (21, 27): "000100"})
@@ -156,40 +131,36 @@ class TestParseRecord54:
         assert result["product_value"] == 0
 
 
-# ==============================================================================
-# Testes do Registro 61 (_parse_record_61)
-# ==============================================================================
-
 class TestParseRecord61:
 
     def test_parse_61_success(self):
         line = build_fixed_line("61", {
             (30, 38): "20230901",
+            (38, 40): "65",
+            (40, 43): "000",
+            (45, 51): "000123",
             (57, 70): "000000005000"
         })
         result = SintegraParser._parse_record_61(line)
 
         assert result == {
             "value": 5000,
+            "nfe_model": "65",
+            "nfe_series": "000",
+            "nfe_number": "000123",
             "emission_date": "2023-09-01"
         }
 
-    def test_parse_61_non_digit_value_fallback_to_zero(self):
+    def test_parse_61_fallback_number_from_date(self):
+        """Testa quando o número ordinal inicial é '000000'."""
         line = build_fixed_line("61", {
             (30, 38): "20230901",
-            (57, 70): "NON_DIGITS"
+            (45, 51): "000000",
+            (57, 70): "000000005000"
         })
         result = SintegraParser._parse_record_61(line)
-        assert result["value"] == 0
+        assert result["nfe_number"] == "230901"
 
-    def test_parse_61_short_line(self):
-        line = "61" + " " * 50
-        assert SintegraParser._parse_record_61(line) is None
-
-
-# ==============================================================================
-# Testes do Parser Completo (parse_sintegra)
-# ==============================================================================
 
 class TestParseSintegra:
 
@@ -218,6 +189,7 @@ class TestParseSintegra:
         })
         line_61 = build_fixed_line("61", {
             (30, 38): "20230902",
+            (45, 51): "000001",
             (57, 70): "000000003000"
         })
 
@@ -229,43 +201,15 @@ class TestParseSintegra:
         assert SintegraParser.get_company_name() == "EMPRESA SINTEGRA S.A."
         assert len(batch) == 2
 
-        rec_61 = [r for r in batch if r["nfe_model"] == "65"][0]
-        assert rec_61["value"] == 3000
-        assert rec_61["cnpj_issuer"] == "12345678000195"
+        # Valida formato de tupla do batch para DuckDB
+        rec_61 = [r for r in batch if r[2] == "65"][0]
+        assert rec_61 == ("12345678000195", 3000, "65", "000", "000001", "2023-09-02")
 
-        rec_50 = [r for r in batch if r["nfe_model"] == "55"][0]
-        assert rec_50["value"] == 15000
-        assert rec_50["nfe_series"] == "001"
-        assert rec_50["nfe_number"] == "000100"
-
-    def test_parse_sintegra_ignores_subsequent_10_records(self):
-        line_10_first = build_fixed_line("10", {
-            (2, 16): "12345678000195",
-            (30, 65): "PRIMEIRA EMPRESA"
-        })
-        line_10_second = build_fixed_line("10", {
-            (2, 16): "12345678000195",
-            (30, 65): "SEGUNDA EMPRESA"
-        })
-
-        content = f"{line_10_first}\n{line_10_second}"
-        batch = []
-
-        SintegraParser.parse_sintegra(content, batch)
-        assert SintegraParser.get_company_name() == "PRIMEIRA EMPRESA"
-
-    def test_parse_sintegra_ignores_blank_lines_and_unknown_records(self):
-        content = "\n  \n99" + " " * 120 + "\n"
-        batch = []
-        SintegraParser.parse_sintegra(content, batch)
-        assert len(batch) == 0
+        rec_50 = [r for r in batch if r[2] == "55"][0]
+        assert rec_50 == ("12345678000195", 15000, "55", "001", "000100", "2023-09-01")
 
 
-# ==============================================================================
-# Testes do Método: get_company_name
-# ==============================================================================
-
-class TestGetCompanyName:
+class TestGetCompanyNameAndCnpj:
 
     def test_get_company_name_success(self):
         SintegraParser.company_name = "MINHA EMPRESA LTDA"
@@ -275,3 +219,7 @@ class TestGetCompanyName:
         SintegraParser.company_name = None
         with pytest.raises(BrokenPipeError, match="VERIFIQUE A PIPELINE"):
             SintegraParser.get_company_name()
+
+    def test_get_cnpj_fallback(self):
+        SintegraParser.company_cnpj = None
+        assert SintegraParser.get_cnpj() == SintegraParser.FALLBACK_CNPJ

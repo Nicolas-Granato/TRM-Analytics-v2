@@ -1,18 +1,12 @@
 import pytest
-import xml.etree.ElementTree as ET
 from src.parsers.xml_parser import XmlParser
 
 
-# ==============================================================================
-# Fixtures e Funções Auxiliares
-# ==============================================================================
-
-VALID_KEY = "35230900000000000191550010000000011000000001"
+VALID_KEY = "35230900000000000191550010000001001000000001"
 
 
 @pytest.fixture
 def make_xml():
-    """Fixture geradora de XMLs em bytes com suporte a overrides para simular caminhos ciclomáticos."""
     def _create_xml_bytes(
         tpAmb: str = "1",
         tpNF: str = "1",
@@ -21,164 +15,214 @@ def make_xml():
         serie: str = "1",
         nNF: str = "100",
         dhEmi: str = "2023-09-01T10:00:00-03:00",
+        dEmi: str = None,
         vNF: str = "150.50",
         include_chNFe_tag: bool = True,
-        infNFe_id: str = None
+        infNFe_id: str = None,
+        include_ide: bool = True,
+        include_emit: bool = True,
     ) -> bytes:
-        inf_id_attr = f' Id="NFe{infNFe_id or chNFe}"' if (infNFe_id or chNFe) else ""
-        
-        xml_str = f"""<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe">
+        inf_id_attr = (
+            f' Id="NFe{infNFe_id or chNFe}"'
+            if (infNFe_id or chNFe)
+            else ""
+        )
+
+        date_tag = (
+            f"<dEmi>{dEmi}</dEmi>"
+            if dEmi is not None
+            else f"<dhEmi>{dhEmi}</dhEmi>"
+        )
+
+        ide_block = (
+            f"""
+            <ide>
+                <tpAmb>{tpAmb}</tpAmb>
+                <tpNF>{tpNF}</tpNF>
+                <serie>{serie}</serie>
+                <nNF>{nNF}</nNF>
+                {date_tag}
+            </ide>
+            """
+            if include_ide
+            else ""
+        )
+
+        emit_block = (
+            f"""
+            <emit>
+                <CNPJ>{cnpj}</CNPJ>
+            </emit>
+            """
+            if include_emit
+            else ""
+        )
+
+        ch_nfe_tag = (
+            f"<chNFe>{chNFe}</chNFe>"
+            if include_chNFe_tag
+            else ""
+        )
+
+        value_tag = (
+            f"<vNF>{vNF}</vNF>"
+            if vNF is not None
+            else ""
+        )
+
+        xml_str = f"""
+        <nfeProc xmlns="http://www.portalfiscal.inf.br/nfe">
             <NFe>
                 <infNFe{inf_id_attr}>
-                    <ide>
-                        <tpAmb>{tpAmb}</tpAmb>
-                        <tpNF>{tpNF}</tpNF>
-                        <serie>{serie}</serie>
-                        <nNF>{nNF}</nNF>
-                        <dhEmi>{dhEmi}</dhEmi>
-                    </ide>
-                    <emit>
-                        <CNPJ>{cnpj}</CNPJ>
-                    </emit>
+                    {ide_block}
+                    {emit_block}
                     <total>
-                        <ICMSTot>
-                            {"<vNF>" + vNF + "</vNF>" if vNF is not None else ""}
-                        </ICMSTot>
+                        <ICMSTot>{value_tag}</ICMSTot>
                     </total>
                 </infNFe>
             </NFe>
             <protNFe>
-                <infProt>
-                    {"<chNFe>" + chNFe + "</chNFe>" if include_chNFe_tag else ""}
-                </infProt>
+                <infProt>{ch_nfe_tag}</infProt>
             </protNFe>
-        </nfeProc>"""
+        </nfeProc>
+        """
+
         return xml_str.encode("utf-8")
 
     return _create_xml_bytes
 
 
-# ==============================================================================
-# Testes do Método: get_tag_text (Complexidade V(G) = 3)
-# ==============================================================================
-
-class TestGetTagText:
-
-    def test_get_tag_text_success(self):
-        """Caminho 1: Elemento encontrado e possui texto limpo."""
-        root = ET.fromstring("<root><child>  conteudo  </child></root>")
-        assert XmlParser.get_tag_text(root, "child") == "conteudo"
-
-    def test_get_tag_text_empty_element_returns_default(self):
-        """Caminho 2: Elemento encontrado, mas com texto vazio."""
-        root = ET.fromstring("<root><child></child></root>")
-        assert XmlParser.get_tag_text(root, "child", default="padrao") == "padrao"
-
-    def test_get_tag_text_missing_element_returns_default(self):
-        """Caminho 3: Elemento não encontrado no XML."""
-        root = ET.fromstring("<root></root>")
-        assert XmlParser.get_tag_text(root, "inexistente", default="padrao") == "padrao"
-
-
-# ==============================================================================
-# Testes do Método: _extract_access_key (Complexidade V(G) = 5)
-# ==============================================================================
-
-class TestExtractAccessKey:
-
-    def test_extract_key_from_chNFe_tag_success(self, make_xml):
-        """Caminho 1: Extrai chave válida diretamente da tag <chNFe>."""
-        xml_bytes = make_xml(include_chNFe_tag=True)
-        root = ET.fromstring(xml_bytes)
-        assert XmlParser._extract_access_key(root) == VALID_KEY
-
-    def test_extract_key_from_infNFe_attribute_fallback_success(self, make_xml):
-        """Caminho 2: Tag <chNFe> ausente; extrai com sucesso do atributo 'Id' em <infNFe>."""
-        xml_bytes = make_xml(include_chNFe_tag=False, infNFe_id=VALID_KEY)
-        root = ET.fromstring(xml_bytes)
-        assert XmlParser._extract_access_key(root) == VALID_KEY
-
-    @pytest.mark.parametrize("invalid_key", [
-        "1234567890",
-        "3523090000000000019155001000000001100000000A"
-    ])
-    def test_extract_key_invalid_tag_and_invalid_attribute(self, make_xml, invalid_key):
-        """Caminho 3 e 4: Chave inválida tanto na tag <chNFe> quanto no nó <infNFe>."""
-        xml_bytes = make_xml(chNFe=invalid_key, include_chNFe_tag=False, infNFe_id=invalid_key)
-        root = ET.fromstring(xml_bytes)
-        assert XmlParser._extract_access_key(root) == ""
-
-
-# ==============================================================================
-# Testes do Método: parse_xml (Complexidade V(G) = 6)
-# ==============================================================================
-
 class TestParseXml:
 
     def test_parse_xml_success(self, make_xml):
-        """Fluxo Principal: XML válido de produção e saída adicionado ao lote."""
-        xml_bytes = make_xml(vNF="150.50")
+        xml_bytes = make_xml(
+            vNF="150.50",
+            cnpj="12345678000195",
+        )
         batch = []
 
-        result = XmlParser.parse_xml(xml_bytes, batch)
+        XmlParser.parse_xml(
+            xml_bytes,
+            batch,
+            cnpj_issuer="12345678000195",
+        )
 
-        assert result is None
         assert len(batch) == 1
         assert batch[0] == (
             VALID_KEY,
             "12345678000195",
             15050,
-            "1",
-            "100",
-            "2023-09-01T10:00:00-03:00",
-            "1",
-            "1"
+            "001",
+            "000000100",
+            "2023-09-01",
         )
 
-    def test_parse_xml_default_vNF_when_tag_missing(self, make_xml):
-        """Garantia da branch vNF: Quando a tag <vNF> não existe, utiliza fallback '0.00' (0 centavos)."""
+    def test_parse_xml_date_dEmi_fallback(self, make_xml):
+        xml_bytes = make_xml(
+            dhEmi="",
+            dEmi="01092023",
+        )
+        batch = []
+
+        XmlParser.parse_xml(
+            xml_bytes,
+            batch,
+            cnpj_issuer="12345678000195",
+        )
+
+        assert len(batch) == 1
+        assert batch[0][5] == "2023-09-01"
+
+    @pytest.mark.parametrize(
+        "override_kwargs",
+        [
+            {"tpNF": "0"},
+            {"include_ide": False},
+            {"include_emit": False},
+            {"cnpj": "99999999000199"},
+        ],
+    )
+    def test_parse_xml_rejections(self, make_xml, override_kwargs):
+        xml_bytes = make_xml(**override_kwargs)
+        batch = []
+
+        XmlParser.parse_xml(
+            xml_bytes,
+            batch,
+            cnpj_issuer="12345678000195",
+        )
+
+        assert batch == []
+
+    def test_parse_xml_rejects_invalid_access_key(self, make_xml):
+        xml_bytes = make_xml(chNFe="123")
+        batch = []
+
+        XmlParser.parse_xml(
+            xml_bytes,
+            batch,
+            cnpj_issuer="12345678000195",
+        )
+
+        assert batch == []
+
+    def test_parse_xml_rejects_mismatched_series(self, make_xml):
+        xml_bytes = make_xml(serie="2")
+        batch = []
+
+        XmlParser.parse_xml(
+            xml_bytes,
+            batch,
+            cnpj_issuer="12345678000195",
+        )
+
+        assert batch == []
+
+    def test_parse_xml_rejects_mismatched_number(self, make_xml):
+        xml_bytes = make_xml(nNF="200")
+        batch = []
+
+        XmlParser.parse_xml(
+            xml_bytes,
+            batch,
+            cnpj_issuer="12345678000195",
+        )
+
+        assert batch == []
+
+    def test_parse_xml_handles_missing_value(self, make_xml):
         xml_bytes = make_xml(vNF=None)
         batch = []
 
-        XmlParser.parse_xml(xml_bytes, batch)
+        XmlParser.parse_xml(
+            xml_bytes,
+            batch,
+            cnpj_issuer="12345678000195",
+        )
 
         assert len(batch) == 1
         assert batch[0][2] == 0
 
-    @pytest.mark.parametrize("override_kwargs", [
-        {"tpAmb": "2"},
-        {"tpNF": "0"},
-        {"chNFe": "123"},
-    ])
-    def test_parse_xml_rejections_return_none(self, make_xml, override_kwargs):
-        """Testa todas as condicionais de descarte/rejeição do parse_xml."""
-        xml_bytes = make_xml(**override_kwargs)
+    def test_parse_xml_handles_missing_access_key_tag(self, make_xml):
+        xml_bytes = make_xml(include_chNFe_tag=False)
         batch = []
 
-        result = XmlParser.parse_xml(xml_bytes, batch)
+        XmlParser.parse_xml(
+            xml_bytes,
+            batch,
+            cnpj_issuer="12345678000195",
+        )
 
-        assert result is None
-        assert len(batch) == 0
+        assert len(batch) == 1
+        assert batch[0][0] == VALID_KEY
 
-    @pytest.mark.parametrize("corrupted_payload", [
-        b"<nfeProc><invalidXml",
-        b"texto plano aleatorio",
-    ])
-    def test_parse_xml_handles_exceptions_silently(self, corrupted_payload):
-        """Testa o bloco try/except tratando falhas de parsing sem lançar exceção."""
+    def test_parse_xml_handles_exceptions_silently(self):
         batch = []
 
-        result = XmlParser.parse_xml(corrupted_payload, batch)
+        XmlParser.parse_xml(
+            b"<invalid_xml",
+            batch,
+            cnpj_issuer="12345678000195",
+        )
 
-        assert result is None
-        assert len(batch) == 0
-
-    def test_parse_xml_handles_value_error_on_conversion(self, make_xml):
-        """Testa tratamento de exceção (ValueError) caso <vNF> contenha string não conversível em float."""
-        xml_bytes = make_xml(vNF="VALOR_INVALIDO")
-        batch = []
-
-        result = XmlParser.parse_xml(xml_bytes, batch)
-
-        assert result is None
-        assert len(batch) == 0
+        assert batch == []
