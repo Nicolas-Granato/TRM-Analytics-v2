@@ -9,8 +9,6 @@ class XmlParser:
     PRODUCTION_ENVIRONMENT_CODE = "1"
     OPERATION_TYPE_OUTGOING = "1"
 
-    CNPJ_FALLBACK = "00000000000000"
-
     @staticmethod
     def _find_node(parent: ET.Element, tag_name: str) -> Optional[ET.Element]:
         for elem in parent.iter():
@@ -50,10 +48,6 @@ class XmlParser:
             if ide_node is None:
                 return
 
-            tpAmb = cls.get_tag_text(ide_node, "tpAmb")
-            if tpAmb != cls.PRODUCTION_ENVIRONMENT_CODE:
-                return
-
             tpNF = cls.get_tag_text(ide_node, "tpNF")
             if tpNF != cls.OPERATION_TYPE_OUTGOING:
                 return
@@ -61,16 +55,13 @@ class XmlParser:
             emit_node = cls._find_node(root, "emit")
             if emit_node is None:
                 return
-
-            xServ = cls.get_tag_text(ide_node, "xServ")
-            if xServ == "INUTILIZAR":
-                return
                 
             cnpj_issuer_xml = re.sub(r"\D", "", cls.get_tag_text(emit_node, "CNPJ")).zfill(14)
             clean_cnpj_sped = re.sub(r"\D", "", cnpj_issuer or "").zfill(14)
 
-            if clean_cnpj_sped != cls.CNPJ_FALLBACK and cnpj_issuer_xml != clean_cnpj_sped:
-                return
+            if clean_cnpj_sped != "00000000000000" and len(clean_cnpj_sped) == 14:
+                if cnpj_issuer_xml[:8] != clean_cnpj_sped[:8]:
+                    return
 
             chNFe = cls._extract_access_key(root)
             if len(chNFe) != cls.ACCESS_KEY_LENGTH:
