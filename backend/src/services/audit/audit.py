@@ -1,4 +1,5 @@
 import io
+import re
 import zipfile
 import duckdb
 import pandas as pd
@@ -23,6 +24,9 @@ from src.database.scripts.tables_queries import (
     CREATE_TEMP_TABLE_SPED,
     CREATE_TEMP_TABLE_XML,
 )
+from src.database.scripts.delete_query import (
+    DELETE_XML_BY_ACCESS_KEY
+)
 from src.database.session_manager.duckdb_session import DuckDBSession
 from src.parsers.sintegra_parser import SintegraParser
 from src.parsers.sped_parser import SpedParser
@@ -31,7 +35,7 @@ from src.parsers.xml_parser import XmlParser
 
 class AuditPipelineService:
 
-    CANCEL_EVENT = ""
+    CANCEL_EVENT = "Canc"
 
     def __init__(
         self,
@@ -49,9 +53,10 @@ class AuditPipelineService:
         
         self.ddl_scripts: list[str] = []
         self._xml_batch: list[tuple] = []
+        self._event_canc: list[str] = []
         self._fiscal_batch: list[tuple] = []
 
-        self._cnpj_issuer: str
+        self._cnpj_issuer: str = ""
 
     def _calculate_metrics(self, execute_sql: Callable[[str, Optional[tuple]], duckdb.DuckDBPyConnection]) -> dict[str, Any]:
         xml_row = execute_sql(XML_METRICS, None).fetchone()
@@ -94,15 +99,23 @@ class AuditPipelineService:
             "dataframe": df_divergencias.to_dict(orient="records")
         }
 
-    def _parse_xml_zip(self, zip_files) -> None:
+    def _parse_xml_zip(self, zip_files: bytes) -> None:
+        if not zip_files:
+            return
+
         with zipfile.ZipFile(io.BytesIO(zip_files)) as zf:
             for file_info in zf.infolist():
-                if self.CANCEL_EVENT in file_info.filename.lower(): #IMPLANTAR CANCELAMENTO
+                if self.CANCEL_EVENT and self.CANCEL_EVENT.lower() in file_info.filename.lower():
+                    numeros = re.findall(r"\d{44}", file_info.filename)
+                    if numeros:
+                        chave_canc = numeros[0]
+                        self._event_canc.append((chave_canc,))
                     continue
+
                 if file_info.filename.lower().endswith(".xml") and not file_info.is_dir():
                     with zf.open(file_info) as xml_file:
                         xml_bytes = xml_file.read()
-                        XmlParser.parse_xml(xml_bytes, self._xml_batch, self._cnpj_issuer)        
+                        XmlParser.parse_xml(xml_bytes, self._xml_batch, self._cnpj_issuer)    
     
     def _parse_xml(self) -> None:
         self._parse_xml_zip(self._zip_files)
@@ -120,15 +133,13 @@ class AuditPipelineService:
         if self._fiscal_files_bytes_2:
             sped_text_2 = self._fiscal_files_bytes_2.decode("latin-1") if isinstance(self._fiscal_files_bytes_2, bytes) else self._fiscal_files_bytes_2
             SpedParser.parse_sped_content(sped_text_2, self._fiscal_batch)
-            aux_cnpj = SpedParser.get_cnpj()
-            if aux_cnpj != self._cnpj_issuer:
-                raise BrokenPipeError("VERIFIQUE A PIPELINE: ARQUIVOS COM CNPJ DIFERENTES")
             
         self.ddl_scripts.append(CREATE_TEMP_TABLE_SPED)
 
     def _parse_sintegra(self) -> None:
         sintegra_text = self._fiscal_file_bytes.decode("latin-1") if isinstance(self._fiscal_file_bytes, bytes) else self._fiscal_file_bytes
         SintegraParser.parse_sintegra(sintegra_text, self._fiscal_batch)
+        self._cnpj_issuer = SintegraParser.get_cnpj()
         
         self.ddl_scripts.append(CREATE_TEMP_TABLE_SINTEGRA)
 
@@ -147,6 +158,10 @@ class AuditPipelineService:
             if len(self._fiscal_batch):
                 insert_fiscal_archive = INSERT_SPED if self._is_sped else INSERT_SINTEGRA
                 db.executemany_sql(insert_fiscal_archive, self._fiscal_batch)
+
+            if len(self._event_canc):
+                cancel_xml = DELETE_XML_BY_ACCESS_KEY
+                db.executemany_sql(cancel_xml, self._event_canc)
 
             result = self._audit_query(db.execute_sql)
 

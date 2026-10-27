@@ -9,6 +9,8 @@ class XmlParser:
     PRODUCTION_ENVIRONMENT_CODE = "1"
     OPERATION_TYPE_OUTGOING = "1"
 
+    CNPJ_FALLBACK = "00000000000000"
+
     @staticmethod
     def _find_node(parent: ET.Element, tag_name: str) -> Optional[ET.Element]:
         for elem in parent.iter():
@@ -59,11 +61,15 @@ class XmlParser:
             emit_node = cls._find_node(root, "emit")
             if emit_node is None:
                 return
-                
-            cnpj_issuer_xml = re.sub(r"\D", "", cls.get_tag_text(emit_node, "CNPJ"))
-            clean_cnpj_sped = re.sub(r"\D", "", cnpj_issuer)
 
-            if cnpj_issuer_xml != clean_cnpj_sped:
+            xServ = cls.get_tag_text(ide_node, "xServ")
+            if xServ == "INUTILIZAR":
+                return
+                
+            cnpj_issuer_xml = re.sub(r"\D", "", cls.get_tag_text(emit_node, "CNPJ")).zfill(14)
+            clean_cnpj_sped = re.sub(r"\D", "", cnpj_issuer or "").zfill(14)
+
+            if clean_cnpj_sped != cls.CNPJ_FALLBACK and cnpj_issuer_xml != clean_cnpj_sped:
                 return
 
             chNFe = cls._extract_access_key(root)

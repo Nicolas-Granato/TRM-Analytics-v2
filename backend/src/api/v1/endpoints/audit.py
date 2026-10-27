@@ -17,6 +17,10 @@ async def run_audit(
         ...,
         description="Arquivo .ZIP contendo as notas fiscais em formato XML."
     ),
+    zip_files_2: Optional[UploadFile] = File(
+        default=None,
+        description="Segundo arquivo .ZIP caso necessário."
+    ),
     fiscal_file: UploadFile = File(
         ...,
         description="Arquivo fiscal principal (SPED Fiscal ou Sintegra)."
@@ -35,6 +39,7 @@ async def run_audit(
 
         result = await controller.execute_audit_pipeline(
             zip_files=zip_files,
+            zip_files_2=zip_files_2,
             fiscal_file=fiscal_file,
             fiscal_file_2=fiscal_file_2,
             is_sped=is_sped
