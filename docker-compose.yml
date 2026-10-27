@@ -1,11 +1,14 @@
 services:
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: trm_analytics_backend
+    build: ./backend
     ports:
       - "8000:8000"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
     environment:
       - PYTHONUNBUFFERED=1
     volumes:
