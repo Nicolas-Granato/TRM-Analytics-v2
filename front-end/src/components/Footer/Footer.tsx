@@ -6,10 +6,10 @@ export function Footer() {
       <div className="trm-footer-content">
         <p>© {new Date().getFullYear()} TRM Sistemas — Automação Comercial e Análises Fiscais</p>
         <div className="trm-footer-dev">
-          <span>Desenvolvido por <strong>Seu Nome</strong></span>
-          <a href="https://github.com/seu-usuario" target="_blank" rel="noreferrer">GitHub</a>
+          <span>Desenvolvido por <strong>Nícolas Granato</strong></span>
+          <a href="https://github.com/Nicolas-Granato" target="_blank" rel="noreferrer">GitHub</a>
           <span className="dot">•</span>
-          <a href="https://linkedin.com/in/seu-usuario" target="_blank" rel="noreferrer">LinkedIn</a>
+          <a href="https://linkedin.com/in/nicolasgranato-jf" target="_blank" rel="noreferrer">LinkedIn</a>
         </div>
       </div>
     </footer>
