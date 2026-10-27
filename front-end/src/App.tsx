@@ -4,6 +4,7 @@ import { Header } from './components/Header/Header';
 import { FiscalTypeSwitch } from './components/FiscalTypeSwitch/FiscalTypeSwitch';
 import { FileContainer, type FiscalArchive } from './components/FileCardContainer/FileCardContainer';
 import { RunAudit } from './components/RunAudit/RunAudit';
+import { ResetAudit } from './components/ResetAudit/ResetAudit'; // Componente de reset
 import { SummaryCards } from './components/SummaryCards/SummaryCards';
 import { AuditTable, type AuditItem } from './components/AuditTable/AuditTable';
 import { Footer } from './components/Footer/Footer';
@@ -24,24 +25,31 @@ interface AuditMetrics {
 
 export function App() {
   const [isSped, setIsSped] = useState<boolean>(true);
-  const [xmlZipFile, setXmlZipFile] = useState<File | null>(null);
-  const [fiscalFile, setFiscalFile] = useState<File | null>(null);
+  const [xmlZipFiles, setXmlZipFiles] = useState<File[]>([]);
+  const [fiscalFiles, setFiscalFiles] = useState<File[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [auditResults, setAuditResults] = useState<AuditItem[] | null>(null);
   const [metrics, setMetrics] = useState<AuditMetrics | null>(null);
 
   const fiscalArchiveType: FiscalArchive = isSped ? 'Sped' : 'Sintegra';
+  const maxFiscalFiles = isSped ? 2 : 1;
+  const maxXmlFiles = 2;
+
+  const handleResetAudit = () => {
+    setXmlZipFiles([]);
+    setFiscalFiles([]);
+    setAuditResults(null);
+    setMetrics(null);
+  };
 
   const handleToggleFiscalType = (checked: boolean) => {
     setIsSped(checked);
-    setFiscalFile(null);
-    setMetrics(null);
-    setAuditResults(null);
+    handleResetAudit();
   };
 
   const handleRunAudit = async () => {
-    if (!xmlZipFile || !fiscalFile) {
-      alert('Por favor, selecione o pacote XML (.ZIP) e o arquivo fiscal (.TXT).');
+    if (xmlZipFiles.length === 0 || fiscalFiles.length === 0) {
+      alert('Por favor, selecione ao menos um pacote XML (.ZIP) e um arquivo fiscal (.TXT).');
       return;
     }
 
@@ -50,8 +58,17 @@ export function App() {
     setMetrics(null);
 
     const formData = new FormData();
-    formData.append('zip_files', xmlZipFile);
-    formData.append('fiscal_file', fiscalFile);
+    
+    formData.append('zip_files', xmlZipFiles[0]);
+    if (xmlZipFiles.length > 1) {
+      formData.append('zip_files_2', xmlZipFiles[1]);
+    }
+
+    formData.append('fiscal_file', fiscalFiles[0]);
+    if (isSped && fiscalFiles.length > 1) {
+      formData.append('fiscal_file_2', fiscalFiles[1]);
+    }
+
     formData.append('is_sped', isSped ? 'true' : 'false');
 
     try {
@@ -120,28 +137,34 @@ export function App() {
             <h2>Painel de Auditoria Fiscal</h2>
             <p>Selecione a modalidade e faça o envio dos arquivos</p>
           </div>
-          <FiscalTypeSwitch isSped={isSped} onToggle={handleToggleFiscalType} />
+          <FiscalTypeSwitch isSped={isSped} onToggle={handleToggleToggleFiscalType => handleToggleFiscalType(!isSped)} />
         </div>
 
         <div className="trm-files-row">
           <FileContainer 
             fiscalArchive="Xml" 
-            selectedFile={xmlZipFile} 
-            onFileSelect={setXmlZipFile} 
+            selectedFiles={xmlZipFiles} 
+            onFilesSelect={setXmlZipFiles}
+            maxFiles={maxXmlFiles}
           />
           <FileContainer 
             fiscalArchive={fiscalArchiveType} 
-            selectedFile={fiscalFile} 
-            onFileSelect={setFiscalFile} 
+            selectedFiles={fiscalFiles} 
+            onFilesSelect={setFiscalFiles}
+            maxFiles={maxFiscalFiles}
           />
         </div>
 
-        <div className="trm-actions-bar">
+        <div className="trm-actions-bar" style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
           <RunAudit 
             onClick={handleRunAudit} 
             isLoading={isLoading} 
-            disabled={!xmlZipFile || !fiscalFile}
+            disabled={xmlZipFiles.length === 0 || fiscalFiles.length === 0}
           />
+
+          {auditResults && (
+            <ResetAudit onReset={handleResetAudit} disabled={isLoading} />
+          )}
         </div>
 
         {metrics && (

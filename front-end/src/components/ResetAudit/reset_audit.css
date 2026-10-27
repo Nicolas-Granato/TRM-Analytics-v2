@@ -1,0 +1,30 @@
+.trm-btn-reset {
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.trm-btn-reset:hover {
+  background-color: #e2e8f0;
+  color: #0f203c;
+  border-color: #94a3b8;
+}
+
+.trm-btn-reset:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.trm-reset-icon {
+  font-size: 1rem;
+}
