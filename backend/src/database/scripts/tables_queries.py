@@ -25,8 +25,8 @@ CREATE TEMP TABLE IF NOT EXISTS sintegra (
     value         BIGINT,
     nfe_model     VARCHAR(2),
     nfe_series    VARCHAR(3),
-    nfe_number    VARCHAR(6),
+    nfe_number    VARCHAR(9),
     emission_date DATE,
-    PRIMARY KEY (cnpj_issuer, nfe_series, nfe_number)
+    PRIMARY KEY (cnpj_issuer, nfe_model, nfe_series, nfe_number)
 );
 """
