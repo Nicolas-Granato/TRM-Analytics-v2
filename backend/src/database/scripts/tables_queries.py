@@ -4,7 +4,7 @@ CREATE TEMP TABLE IF NOT EXISTS xml (
     cnpj_issuer   VARCHAR(14),
     value         BIGINT,
     nfe_series    VARCHAR(3),
-    nfe_number    VARCHAR(6),
+    nfe_number    VARCHAR(9),
     emission_date DATE
 );
 """
@@ -27,6 +27,6 @@ CREATE TEMP TABLE IF NOT EXISTS sintegra (
     nfe_series    VARCHAR(3),
     nfe_number    VARCHAR(9),
     emission_date DATE,
-    PRIMARY KEY (cnpj_issuer, nfe_model, nfe_series, nfe_number)
+    PRIMARY KEY (cnpj_issuer, nfe_model, nfe_series, nfe_number, emission_date)
 );
 """

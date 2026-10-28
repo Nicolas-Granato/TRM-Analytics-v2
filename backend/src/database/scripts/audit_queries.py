@@ -1,16 +1,16 @@
 AUDIT_SPED_QUERY = """
 SELECT 
     COALESCE(x.access_key, s.access_key) AS access_key,
-    SUBSTR(COALESCE(x.access_key, s.access_key), 21, 2) AS nfe_model,
+    COALESCE(SUBSTR(x.access_key, 21, 2), SUBSTR(s.access_key, 21, 2)) AS nfe_model,
     x.value AS xml_value,
     s.value AS sped_value,
     (COALESCE(x.value, 0) - COALESCE(s.value, 0)) AS value_difference,
-    CAST(x.emission_date AS VARCHAR) AS xml_emission_date,
-    CAST(s.emission_date AS VARCHAR) AS sped_emission_date,
+    CAST(CAST(x.emission_date AS DATE) AS VARCHAR) AS xml_emission_date,
+    CAST(CAST(s.emission_date AS DATE) AS VARCHAR) AS sped_emission_date,
     CASE 
-        WHEN x.access_key IS NULL THEN 'NOTA_PRESENTE_APENAS_NO_SPED'
-        WHEN s.access_key IS NULL THEN 'NOTA_PRESENTE_APENAS_NO_XML'
-        WHEN x.value <> s.value THEN 'DIVERGENCIA_DE_VALOR'
+        WHEN x.access_key IS NULL THEN 'ALERTA_PRESENTE_APENAS_NO_SPED'
+        WHEN s.access_key IS NULL THEN 'ALERTA_PRESENTE_APENAS_NO_XML'
+        WHEN x.value <> s.value THEN 'ERRO_DIVERGENCIA_DE_VALOR'
     END AS divergence_type
 FROM xml x
 FULL OUTER JOIN sped s ON x.access_key = s.access_key
@@ -25,9 +25,9 @@ WITH
 xml_base AS (
     SELECT
         cnpj_issuer,
-        SUBSTR(access_key, 21, 2) AS nfe_model,
-        SUBSTR(access_key, 23, 3) AS nfe_series,
-        SUBSTR(access_key, 26, 9) AS nfe_number,
+        LPAD(TRIM(SUBSTR(access_key, 21, 2)), 2, '0') AS nfe_model,
+        LPAD(TRIM(nfe_series), 3, '0') AS nfe_series,
+        LPAD(CAST(TRY_CAST(TRIM(nfe_number) AS BIGINT) AS VARCHAR), 9, '0') AS nfe_number,
         value,
         CAST(emission_date AS DATE) AS emission_date
     FROM xml
@@ -55,7 +55,7 @@ sintegra_nfe_base AS (
         cnpj_issuer,
         LPAD(TRIM(nfe_model), 2, '0') AS nfe_model,
         LPAD(TRIM(nfe_series), 3, '0') AS nfe_series,
-        LPAD(TRIM(nfe_number), 9, '0') AS nfe_number,
+        LPAD(CAST(TRY_CAST(TRIM(nfe_number) AS BIGINT) AS VARCHAR), 9, '0') AS nfe_number,
         value,
         CAST(emission_date AS DATE) AS emission_date
     FROM sintegra
@@ -81,45 +81,37 @@ sintegra_nfe AS (
 audit_nfe AS (
     SELECT
         COALESCE(x.cnpj_issuer, s.cnpj_issuer) AS cnpj_issuer,
-        COALESCE(x.nfe_model, s.nfe_model) AS nfe_model,
+        COALESCE(x.nfe_model, s.nfe_model, '55') AS nfe_model,
 
         CONCAT(
-            'SERIE_', COALESCE(x.nfe_series, s.nfe_series),
+            'NFE_SERIE_', COALESCE(x.nfe_series, s.nfe_series),
             '_NUM_', COALESCE(x.nfe_number, s.nfe_number)
         ) AS composite_key,
 
         x.value AS xml_value,
         s.value AS sintegra_value,
-        COALESCE(x.value, 0) - COALESCE(s.value, 0)
-            AS value_difference,
+        COALESCE(x.value, 0) - COALESCE(s.value, 0) AS value_difference,
 
-        x.emission_date AS xml_emission_date,
-        s.emission_date AS sintegra_emission_date,
+        CAST(x.emission_date AS VARCHAR) AS xml_emission_date,
+        CAST(s.emission_date AS VARCHAR) AS sintegra_emission_date,
 
         CASE
-            WHEN x.cnpj_issuer IS NULL
-                THEN 'ALERTA_PRESENTE_APENAS_NO_SINTEGRA'
-            WHEN s.cnpj_issuer IS NULL
-                THEN 'ALERTA_PRESENTE_APENAS_NO_XML'
-            WHEN x.distinct_values > 1 OR x.distinct_dates > 1
-                THEN 'ALERTA_XML_CHAVE_DUPLICADA_COM_DIVERGENCIA'
-            WHEN s.distinct_values > 1 OR s.distinct_dates > 1
-                THEN 'ALERTA_SINTEGRA_CHAVE_DUPLICADA_COM_DIVERGENCIA'
-            WHEN x.value <> s.value
-                THEN 'ERRO_DIVERGENCIA_DE_VALOR'
-            WHEN x.emission_date IS DISTINCT FROM s.emission_date
-                THEN 'ALERTA_DIVERGENCIA_DATA_EMISSAO'
+            WHEN x.nfe_number IS NULL THEN 'ALERTA_PRESENTE_APENAS_NO_SINTEGRA'
+            WHEN s.nfe_number IS NULL THEN 'ALERTA_PRESENTE_APENAS_NO_XML'
+            WHEN x.distinct_values > 1 OR x.distinct_dates > 1 THEN 'ALERTA_XML_CHAVE_DUPLICADA_COM_DIVERGENCIA'
+            WHEN s.distinct_values > 1 OR s.distinct_dates > 1 THEN 'ALERTA_SINTEGRA_CHAVE_DUPLICADA_COM_DIVERGENCIA'
+            WHEN x.value <> s.value THEN 'ERRO_DIVERGENCIA_DE_VALOR'
+            WHEN x.emission_date IS DISTINCT FROM s.emission_date THEN 'ALERTA_DIVERGENCIA_DATA_EMISSAO'
         END AS divergence_type
 
     FROM xml_nfe x
     FULL OUTER JOIN sintegra_nfe s
-        ON x.cnpj_issuer = s.cnpj_issuer
-       AND x.nfe_model = s.nfe_model
+        ON x.nfe_model = s.nfe_model
        AND x.nfe_series = s.nfe_series
        AND x.nfe_number = s.nfe_number
 
-    WHERE x.cnpj_issuer IS NULL
-       OR s.cnpj_issuer IS NULL
+    WHERE x.nfe_number IS NULL
+       OR s.nfe_number IS NULL
        OR x.value <> s.value
        OR x.emission_date IS DISTINCT FROM s.emission_date
        OR x.distinct_values > 1
@@ -153,34 +145,29 @@ audit_nfce AS (
         COALESCE(x.cnpj_issuer, s.cnpj_issuer) AS cnpj_issuer,
         '65' AS nfe_model,
         CONCAT(
-            'NFCE_DIARIA_',
+            'NFCE_LOTE_DIARIO_',
             CAST(COALESCE(x.emission_date, s.emission_date) AS VARCHAR)
         ) AS composite_key,
 
         x.value AS xml_value,
         s.value AS sintegra_value,
-        COALESCE(x.value, 0) - COALESCE(s.value, 0)
-            AS value_difference,
+        COALESCE(x.value, 0) - COALESCE(s.value, 0) AS value_difference,
 
-        x.emission_date AS xml_emission_date,
-        s.emission_date AS sintegra_emission_date,
+        CAST(x.emission_date AS VARCHAR) AS xml_emission_date,
+        CAST(s.emission_date AS VARCHAR) AS sintegra_emission_date,
 
         CASE
-            WHEN x.cnpj_issuer IS NULL
-                THEN 'ALERTA_RESUMO_61_SEM_XML_NO_DIA'
-            WHEN s.cnpj_issuer IS NULL
-                THEN 'ALERTA_XML_NFCE_SEM_REGISTRO_61_NO_DIA'
-            WHEN x.value <> s.value
-                THEN 'ERRO_DIVERGENCIA_VALOR_LOTE_DIARIO'
+            WHEN x.emission_date IS NULL THEN 'ALERTA_RESUMO_61_SEM_XML_NO_DIA'
+            WHEN s.emission_date IS NULL THEN 'ALERTA_XML_NFCE_SEM_REGISTRO_61_NO_DIA'
+            WHEN x.value <> s.value THEN 'ERRO_DIVERGENCIA_VALOR_LOTE_DIARIO'
         END AS divergence_type
 
     FROM xml_nfce x
     FULL OUTER JOIN sintegra_nfce s
-        ON x.cnpj_issuer = s.cnpj_issuer
-       AND x.emission_date = s.emission_date
+       ON x.emission_date = s.emission_date
 
-    WHERE x.cnpj_issuer IS NULL
-       OR s.cnpj_issuer IS NULL
+    WHERE x.emission_date IS NULL
+       OR s.emission_date IS NULL
        OR x.value <> s.value
 )
 
