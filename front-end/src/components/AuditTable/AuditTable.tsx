@@ -15,13 +15,16 @@ export interface AuditItem {
   divergence_type: string;
 }
 
+// 1. Adicione enterpriseName aqui (opcional com ?)
 interface AuditTableProps {
   items: AuditItem[];
   isSped: boolean;
+  enterpriseName?: string;
   onExportExcel: () => void;
 }
 
-export function AuditTable({ items, isSped, onExportExcel }: AuditTableProps) {
+// 2. Adicione enterpriseName na desestruturação dos parâmetros
+export function AuditTable({ items, isSped, enterpriseName, onExportExcel }: AuditTableProps) {
   const formatCurrency = (val: number) =>
     ((val || 0) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -40,7 +43,14 @@ export function AuditTable({ items, isSped, onExportExcel }: AuditTableProps) {
     <div className="trm-table-card">
       <div className="trm-table-header">
         <div>
-          <h3>Prévia do Relatório de Inconsistências ({isSped ? 'SPED' : 'Sintegra'})</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h3>Prévia do Relatório de Inconsistências ({isSped ? 'SPED' : 'Sintegra'})</h3>
+            {enterpriseName && (
+              <span className="enterprise-badge">
+                🏢 {enterpriseName}
+              </span>
+            )}
+          </div>
           <p>{items.length} registros com divergência encontrados</p>
         </div>
         <button className="trm-btn-excel" onClick={onExportExcel}>

@@ -10,7 +10,7 @@ import { AuditTable, type AuditItem } from './components/AuditTable/AuditTable';
 import { Footer } from './components/Footer/Footer';
 import './app.css';
 
-const API_BASE_URL = 'http://192.168.15.11:8000/api/v1';
+const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:8000/api/v1`;
 
 interface AuditMetrics {
   xml_metrics: {
@@ -30,6 +30,7 @@ export function App() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [auditResults, setAuditResults] = useState<AuditItem[] | null>(null);
   const [metrics, setMetrics] = useState<AuditMetrics | null>(null);
+  const [enterpriseName, setEnterpriseName] = useState<string>('');
 
   const fiscalArchiveType: FiscalArchive = isSped ? 'Sped' : 'Sintegra';
   const maxFiscalFiles = isSped ? 2 : 1;
@@ -41,6 +42,7 @@ export function App() {
     setFiscalFiles([]);
     setAuditResults(null);
     setMetrics(null);
+    setEnterpriseName('');
   };
 
   const handleToggleFiscalType = (checked: boolean) => {
@@ -59,6 +61,7 @@ export function App() {
     setIsLoading(true);
     setAuditResults(null);
     setMetrics(null);
+    setEnterpriseName('');
 
     const formData = new FormData();
     
@@ -85,6 +88,10 @@ export function App() {
       
       setAuditResults(Array.isArray(items) ? items : []);
       
+      if (responseData.enterprise_name) {
+        setEnterpriseName(responseData.enterprise_name);
+      }
+
       if (responseData.metricas) {
         setMetrics(responseData.metricas);
       }
@@ -105,30 +112,74 @@ export function App() {
   };
 
   const handleExportExcel = async () => {
-    if (isLoading || !auditResults || auditResults.length === 0) return;
+      if (isLoading || !auditResults || auditResults.length === 0) return;
 
-    try {
-      const payload = {
-        enterprise_name: 'TRM_SISTEMAS',
-        items: auditResults,
-      };
+      try {
+        const payload = {
+          enterprise_name: enterpriseName || 'EMPRESA_DESCONHECIDA',
+          items: auditResults,
+        };
 
-      const response = await axios.post(`${API_BASE_URL}/export/excel`, payload, {
-        responseType: 'blob',
-      });
+        const response = await axios.post(`${API_BASE_URL}/export/excel`, payload, {
+          responseType: 'blob',
+        });
 
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `Relatorio_Auditoria_${fiscalArchiveType}_TRM.xlsx`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (error: any) {
-      console.error('Erro ao exportar:', error);
-      alert('Erro ao exportar a planilha.');
-    }
-  };
+        if (response.data.type === 'application/json') {
+          const text = await response.data.text();
+          const errorData = JSON.parse(text);
+          alert(`Erro do servidor: ${errorData.detail || 'Falha ao gerar Excel'}`);
+          return;
+        }
+
+        let mesAno = '';
+        if (auditResults && auditResults.length > 0) {
+          const sampleItem = auditResults[0];
+          const dateStr = sampleItem.xml_emission_date || sampleItem.sped_emission_date || sampleItem.sintegra_emission_date;
+          if (dateStr && dateStr.length >= 7) {
+            const parts = dateStr.split('-');
+            if (parts.length >= 2) {
+              mesAno = `${parts[1]}_${parts[0]}`;
+            }
+          }
+        }
+
+        if (!mesAno) {
+          const now = new Date();
+          const month = String(now.getMonth() + 1).padStart(2, '0');
+          mesAno = `${month}_${now.getFullYear()}`;
+        }
+
+        const cleanEnterprise = (enterpriseName || 'EMPRESA_DESCONHECIDA')
+          .toUpperCase()
+          .replace(/[^\w\s-]/g, '')
+          .replace(/[-\s]+/g, '_');
+
+        let filename = `relatorio_${mesAno}_${cleanEnterprise}.xlsx`;
+
+        const contentDisposition = response.headers['content-disposition'] || response.headers['Content-Disposition'];
+        if (contentDisposition) {
+          const match = contentDisposition.match(/filename="?([^";]+)"?/);
+          if (match && match[1]) {
+            filename = match[1];
+          }
+        }
+
+        const blob = new Blob([response.data], { 
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+        });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (error: any) {
+        console.error('Erro detalhado ao exportar:', error);
+        alert(`Erro ao exportar a planilha: ${error.message || 'Falha na conexão'}`);
+      }
+    };
 
   return (
     <div className="trm-app">
@@ -195,6 +246,7 @@ export function App() {
             <AuditTable 
               items={auditResults} 
               isSped={isSped}
+              enterpriseName={enterpriseName}
               onExportExcel={handleExportExcel} 
             />
           </div>
