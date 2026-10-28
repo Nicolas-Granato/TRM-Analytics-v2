@@ -1,4 +1,6 @@
 import io
+import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Union
 
@@ -13,7 +15,33 @@ from src.services.export.excel_styles import ExcelStyles
 class ExcelExport:
 
     def __init__(self, enterprise_name: str = "EMPRESA_DESCONHECIDA"):
-        self.enterprise_name = (enterprise_name or "EMPRESA_DESCONHECIDA").strip().upper()
+        raw_name = (enterprise_name or "EMPRESA_DESCONHECIDA").strip().upper()
+        clean_name = re.sub(r"[^\w\s-]", "", raw_name)
+        self.enterprise_name = re.sub(r"[-\s]+", "_", clean_name).strip("_") or "EMPRESA_DESCONHECIDA"
+
+    def get_formatted_filename(self, df_results: pd.DataFrame) -> str:
+        """Gera o nome do arquivo no padrão: relatorio_{mês_ano}_{NOME_DA_EMPRESA}.xlsx"""
+        date_str = None
+
+        if df_results is not None and not df_results.empty:
+            for col in ("xml_emission_date", "sped_emission_date", "sintegra_emission_date"):
+                if col in df_results.columns:
+                    valid_dates = df_results[col].dropna().astype(str)
+                    valid_dates = valid_dates[valid_dates.str.match(r"^\d{4}-\d{2}-\d{2}$")]
+                    if not valid_dates.empty:
+                        date_str = valid_dates.iloc[0]
+                        break
+
+        if date_str:
+            try:
+                dt = datetime.strptime(date_str, "%Y-%m-%d")
+                mes_ano = dt.strftime("%m_%Y")
+            except ValueError:
+                mes_ano = datetime.now().strftime("%m_%Y")
+        else:
+            mes_ano = datetime.now().strftime("%m_%Y")
+
+        return f"relatorio_{mes_ano}_{self.enterprise_name}.xlsx"
 
     def export_dataframe_to_bytes(self, df_results: pd.DataFrame) -> io.BytesIO:
         if df_results is None or df_results.empty:
@@ -29,16 +57,13 @@ class ExcelExport:
         last_col_letter = get_column_letter(len(columns))
 
         self._build_header_section(ws, last_col_letter, columns)
-
         last_data_row = self._populate_data(ws, df_results, columns)
-
         self._apply_table_formatting(ws, last_col_letter, last_data_row)
         self._auto_fit_columns(ws)
 
         buffer = io.BytesIO()
         wb.save(buffer)
         buffer.seek(0)
-        
         wb.close()
 
         return buffer
@@ -61,7 +86,7 @@ class ExcelExport:
 
         ws.merge_cells(f"A2:{last_col_letter}2")
         subtitle_cell = ws["A2"]
-        subtitle_cell.value = f"EMPRESA AUDITADA: {self.enterprise_name}"
+        subtitle_cell.value = f"EMPRESA AUDITADA: {self.enterprise_name.replace('_', ' ')}"
         subtitle_cell.font = ExcelStyles.SUBTITLE_FONT
         subtitle_cell.fill = ExcelStyles.SUBTITLE_FILL
         subtitle_cell.alignment = ExcelStyles.ALIGN_TITLE
@@ -85,7 +110,7 @@ class ExcelExport:
 
     def _populate_data(self, ws, df_results: pd.DataFrame, columns: list[str]) -> int:
         status_col_name = None
-        for col in ("audit_status", "status_auditoria", "status"):
+        for col in ("divergence_type", "audit_status", "status_auditoria", "status"):
             if col in columns:
                 status_col_name = col
                 break
@@ -123,10 +148,10 @@ class ExcelExport:
             cell.value = ExcelStyles.format_nfe_model(val)
             cell.alignment = ExcelStyles.ALIGN_CENTER
 
-        elif ("value" in col_name or "valor" in col_name or "val" in col_name) and isinstance(
+        elif ("value" in col_name or "valor" in col_name or "difference" in col_name) and isinstance(
             val, (int, float)
         ):
-            cell.value = val / 100.0 if ("cents" in col_name or "centavos" in col_name) else float(val)
+            cell.value = val / 100.0 if ("cents" in col_name or "centavos" in col_name or isinstance(val, int)) else float(val)
             cell.number_format = "R$ #,##0.00"
             cell.alignment = ExcelStyles.ALIGN_RIGHT
 
@@ -142,7 +167,7 @@ class ExcelExport:
         else:
             cell.value = str(val)
             cell.alignment = (
-                ExcelStyles.ALIGN_CENTER if col_name.startswith("status") else ExcelStyles.ALIGN_LEFT
+                ExcelStyles.ALIGN_CENTER if "divergence" in col_name or col_name.startswith("status") else ExcelStyles.ALIGN_LEFT
             )
 
     def _apply_table_formatting(self, ws, last_col_letter: str, last_data_row: int) -> None:
