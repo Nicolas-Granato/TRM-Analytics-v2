@@ -87,9 +87,34 @@
   color: #047857;
 }
 
+.badge-warning {
+  background-color: #fef3c7;
+  color: #d97706;
+}
+
 .badge-alert {
   background-color: #fee2e2;
   color: #b91c1c;
+}
+
+.model-badge {
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: inline-block;
+  background-color: #e2e8f0;
+  color: #334155;
+}
+
+.badge-nfe {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.badge-nfce {
+  background-color: #fef3c7;
+  color: #92400e;
 }
 
 .font-mono {

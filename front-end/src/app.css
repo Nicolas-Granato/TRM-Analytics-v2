@@ -58,6 +58,13 @@ body {
 .trm-actions-bar {
   display: flex;
   justify-content: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.trm-actions-bar > * {
+  flex: 1;
+  width: 100%;
 }
 
 .trm-btn-run {

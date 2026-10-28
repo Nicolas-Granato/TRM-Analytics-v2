@@ -120,7 +120,7 @@ export function App() {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', 'Relatorio_Auditoria_TRM.xlsx');
+      link.setAttribute('download', `Relatorio_Auditoria_${fiscalArchiveType}_TRM.xlsx`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -167,7 +167,7 @@ export function App() {
           />
         </div>
 
-        <div className="trm-actions-bar" style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+        <div className="trm-actions-bar">
           <RunAudit 
             onClick={handleRunAudit} 
             isLoading={isLoading} 
@@ -194,6 +194,7 @@ export function App() {
           <div style={isLoading ? { opacity: 0.6, pointerEvents: 'none' } : undefined}>
             <AuditTable 
               items={auditResults} 
+              isSped={isSped}
               onExportExcel={handleExportExcel} 
             />
           </div>
