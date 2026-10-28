@@ -57,6 +57,7 @@ class AuditPipelineService:
         self._fiscal_batch: list[tuple] = []
 
         self._cnpj_issuer: Optional[str] = None
+        self._company_name: Optional[str] = None
 
     def _calculate_metrics(self, execute_sql: Callable[[str, Optional[tuple]], duckdb.DuckDBPyConnection]) -> dict[str, Any]:
         xml_row = execute_sql(XML_METRICS, None).fetchone()
@@ -96,6 +97,7 @@ class AuditPipelineService:
         df_divergencias = df_divergencias.astype(object).fillna("")
 
         return {
+            "enterprise_name": self._company_name or "EMPRESA_NAO_IDENTIFICADA",
             "metricas": metrics,
             "dataframe": df_divergencias.to_dict(orient="records")
         }
@@ -131,6 +133,7 @@ class AuditPipelineService:
         sped_text = self._fiscal_file_bytes.decode("latin-1") if isinstance(self._fiscal_file_bytes, bytes) else self._fiscal_file_bytes
         SpedParser.parse_sped_content(sped_text, self._fiscal_batch)
         self._cnpj_issuer = SpedParser.get_cnpj()
+        self._company_name = SpedParser.get_company_name()
         
         if self._fiscal_files_bytes_2:
             sped_text_2 = self._fiscal_files_bytes_2.decode("latin-1") if isinstance(self._fiscal_files_bytes_2, bytes) else self._fiscal_files_bytes_2
@@ -142,6 +145,7 @@ class AuditPipelineService:
         sintegra_text = self._fiscal_file_bytes.decode("latin-1") if isinstance(self._fiscal_file_bytes, bytes) else self._fiscal_file_bytes
         SintegraParser.parse_sintegra(sintegra_text, self._fiscal_batch)
         self._cnpj_issuer = SintegraParser.get_cnpj()
+        self._company_name = SintegraParser.get_company_name()
         
         self.ddl_scripts.append(CREATE_TEMP_TABLE_SINTEGRA)
 

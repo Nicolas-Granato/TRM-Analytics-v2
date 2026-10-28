@@ -116,6 +116,9 @@ class SintegraParser:
 
     @classmethod
     def parse_sintegra(cls, sintegra_content: str, sintegra_batch: list) -> None:
+        cls.company_name = None
+        cls.company_cnpj = None
+
         parsed_10: Optional[dict] = None
         parsed_50_records: dict[tuple[str, str], dict[str, Any]] = {}
         raw_54_lines: list[str] = []
@@ -212,10 +215,8 @@ class SintegraParser:
 
     @classmethod
     def get_company_name(cls) -> str:
-        if cls.company_name:
-            return cls.company_name
-        raise BrokenPipeError("VERIFIQUE A PIPELINE: NOME DA EMPRESA NÃO ENCONTRADO")
+        return cls.company_name or cls.FALLBACK_COMPANY_NAME
 
     @classmethod
     def get_cnpj(cls) -> str:
-        return getattr(cls, 'company_cnpj', None) or cls.FALLBACK_CNPJ
+        return cls.company_cnpj or cls.FALLBACK_CNPJ
