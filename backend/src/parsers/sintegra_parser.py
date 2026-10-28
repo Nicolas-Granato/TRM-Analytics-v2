@@ -54,8 +54,8 @@ class SintegraParser:
         cnpj_issuer = line_50[2:16].strip().zfill(14)
         emission_date = line_50[30:38].strip()
         nfe_model = line_50[40:42].strip() or "55"
-        nfe_series = line_50[42:45].strip()
-        nfe_number = line_50[45:51].strip()
+        nfe_series = line_50[42:45].strip().zfill(3)
+        nfe_number = line_50[45:51].strip().zfill(9)
 
         return {
             "cnpj_issuer": cnpj_issuer,
@@ -71,14 +71,19 @@ class SintegraParser:
         if len(line_54) < 126 or not line_54.startswith("54"):
             return None
 
-        series_number = line_54[18:21].strip()
-        document_number = line_54[21:27].strip()
+        series_number = line_54[18:21].strip().zfill(3)
+        document_number = line_54[21:27].strip().zfill(9)
 
         if not (series_number and document_number):
             return None
 
         raw_value = line_54[62:74].strip()
-        product_value_cents = int(raw_value) if raw_value.isdigit() else 0
+        value_cents = int(raw_value) if raw_value.isdigit() else 0
+        
+        raw_discounts = line_54[74:86].strip()
+        discounts_value_cents = int(raw_discounts) if raw_discounts.isdigit() else 0
+
+        product_value_cents = value_cents - discounts_value_cents
 
         return {
             "series_number": series_number,
@@ -96,7 +101,7 @@ class SintegraParser:
         nfe_series = line_61[40:43].strip() or "000"
         
         raw_ord_initial = line_61[45:51].strip()
-        nfe_number = raw_ord_initial if raw_ord_initial and raw_ord_initial != "000000" else raw_emission_date[2:8]
+        nfe_number = raw_ord_initial.zfill(9) if raw_ord_initial and raw_ord_initial != "000000" else raw_emission_date[2:8].zfill(9)
 
         raw_value = line_61[57:70].strip()
         value = int(raw_value) if raw_value.isdigit() else 0
@@ -160,7 +165,7 @@ class SintegraParser:
                     key_61 = (
                         parsed_61.get("nfe_model", "65"),
                         parsed_61.get("nfe_series", "000"),
-                        parsed_61.get("nfe_number", "000000"),
+                        parsed_61.get("nfe_number", "000000000"),
                         parsed_61.get("emission_date", cls.FALLBACK_DATE)
                     )
 
@@ -169,7 +174,7 @@ class SintegraParser:
                         parsed_61.get("value", 0),
                         parsed_61.get("nfe_model", "65"),
                         parsed_61.get("nfe_series", "000"),
-                        parsed_61.get("nfe_number", "000000"),
+                        parsed_61.get("nfe_number", "000000000"),
                         parsed_61.get("emission_date", cls.FALLBACK_DATE)
                     )
 
