@@ -6,9 +6,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 1G  # Aumentado para evitar OOM durante processamentos pesados
         reservations:
-          memory: 64M
+          memory: 128M
     environment:
       - PYTHONUNBUFFERED=1
     volumes:
@@ -22,10 +22,5 @@ services:
       dockerfile: Dockerfile
     container_name: trm_analytics_frontend
     ports:
-      - "5173:5173"
-    environment:
-      - CHOKIDAR_USEPOLLING=true
-    volumes:
-      - ./front-end:/app
-      - /app/node_modules
+      - "80:80"
     restart: always
