@@ -60,14 +60,15 @@ class TestAuditPipelineServiceComplexity:
         assert mock_parse_xml.call_count == 2
         assert len(service._event_canc) == 2
 
-    # -------------------------------------------------------------------------
+# -------------------------------------------------------------------------
     # Testes para _parse_sped e _parse_sintegra
     # -------------------------------------------------------------------------
 
+    @patch("src.services.audit.audit.SpedParser.get_company_name", return_value="EMPRESA TESTE LTDA")
     @patch("src.services.audit.audit.SpedParser.get_cnpj", return_value="12345678000195")
     @patch("src.services.audit.audit.SpedParser.parse_sped_content")
     def test_parse_sped_single_and_multiple_files(
-        self, mock_parse_sped, mock_get_cnpj
+        self, mock_parse_sped, mock_get_cnpj, mock_get_company_name
     ):
         """Testa o parsing de SPED com 1 e 2 arquivos fiscais em bytes e string."""
         service = AuditPipelineService(
@@ -80,11 +81,15 @@ class TestAuditPipelineServiceComplexity:
 
         assert mock_parse_sped.call_count == 2
         assert service._cnpj_issuer == "12345678000195"
+        assert service._company_name == "EMPRESA TESTE LTDA"
         assert "CREATE TEMP TABLE IF NOT EXISTS sped" in service.ddl_scripts[0]
 
+    @patch("src.services.audit.audit.SintegraParser.get_company_name", return_value="EMPRESA TESTE LTDA")
     @patch("src.services.audit.audit.SintegraParser.get_cnpj", return_value="12345678000195")
     @patch("src.services.audit.audit.SintegraParser.parse_sintegra")
-    def test_parse_sintegra_flow(self, mock_parse_sintegra, mock_get_cnpj):
+    def test_parse_sintegra_flow(
+        self, mock_parse_sintegra, mock_get_cnpj, mock_get_company_name
+    ):
         """Testa a chamada do parser Sintegra com extração de CNPJ."""
         service = AuditPipelineService(
             zip_files=b"", fiscal_file_bytes=b"sintegra_content", is_sped=False
@@ -93,6 +98,7 @@ class TestAuditPipelineServiceComplexity:
 
         mock_parse_sintegra.assert_called_once_with("sintegra_content", service._fiscal_batch)
         assert service._cnpj_issuer == "12345678000195"
+        assert service._company_name == "EMPRESA TESTE LTDA"
         assert "CREATE TEMP TABLE IF NOT EXISTS sintegra" in service.ddl_scripts[0]
 
     # -------------------------------------------------------------------------

@@ -71,11 +71,14 @@ class SintegraParser:
         if len(line_54) < 126 or not line_54.startswith("54"):
             return None
 
-        series_number = line_54[18:21].strip().zfill(3)
-        document_number = line_54[21:27].strip().zfill(9)
+        raw_series = line_54[18:21].strip()
+        raw_document = line_54[21:27].strip()
 
-        if not (series_number and document_number):
+        if not (raw_series and raw_document):
             return None
+
+        series_number = raw_series.zfill(3)
+        document_number = raw_document.zfill(9)
 
         raw_value = line_54[62:74].strip()
         value_cents = int(raw_value) if raw_value.isdigit() else 0

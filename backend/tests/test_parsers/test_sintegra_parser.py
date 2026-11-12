@@ -86,7 +86,7 @@ class TestParseRecord50:
             "cnpj_issuer": "12345678000195",
             "nfe_model": "55",
             "nfe_series": "001",
-            "nfe_number": "000100",
+            "nfe_number": "000000100",
             "value": 0,
             "emission_date": "2023-09-01"
         }
@@ -113,7 +113,7 @@ class TestParseRecord54:
 
         assert result == {
             "series_number": "001",
-            "document_number": "000100",
+            "document_number": "000000100",
             "product_value": 15050
         }
 
@@ -147,7 +147,7 @@ class TestParseRecord61:
             "value": 5000,
             "nfe_model": "65",
             "nfe_series": "000",
-            "nfe_number": "000123",
+            "nfe_number": "000000123",
             "emission_date": "2023-09-01"
         }
 
@@ -159,7 +159,7 @@ class TestParseRecord61:
             (57, 70): "000000005000"
         })
         result = SintegraParser._parse_record_61(line)
-        assert result["nfe_number"] == "230901"
+        assert result["nfe_number"] == "000230901"
 
 
 class TestParseSintegra:
@@ -201,12 +201,11 @@ class TestParseSintegra:
         assert SintegraParser.get_company_name() == "EMPRESA SINTEGRA S.A."
         assert len(batch) == 2
 
-        # Valida formato de tupla do batch para DuckDB
         rec_61 = [r for r in batch if r[2] == "65"][0]
-        assert rec_61 == ("12345678000195", 3000, "65", "000", "000001", "2023-09-02")
+        assert rec_61 == ("12345678000195", 3000, "65", "000", "000000001", "2023-09-02")
 
         rec_50 = [r for r in batch if r[2] == "55"][0]
-        assert rec_50 == ("12345678000195", 15000, "55", "001", "000100", "2023-09-01")
+        assert rec_50 == ("12345678000195", 15000, "55", "001", "000000100", "2023-09-01")
 
 
 class TestGetCompanyNameAndCnpj:
@@ -215,10 +214,9 @@ class TestGetCompanyNameAndCnpj:
         SintegraParser.company_name = "MINHA EMPRESA LTDA"
         assert SintegraParser.get_company_name() == "MINHA EMPRESA LTDA"
 
-    def test_get_company_name_raises_broken_pipe_error(self):
+    def test_get_company_name_fallback(self):
         SintegraParser.company_name = None
-        with pytest.raises(BrokenPipeError, match="VERIFIQUE A PIPELINE"):
-            SintegraParser.get_company_name()
+        assert SintegraParser.get_company_name() == SintegraParser.FALLBACK_COMPANY_NAME
 
     def test_get_cnpj_fallback(self):
         SintegraParser.company_cnpj = None
