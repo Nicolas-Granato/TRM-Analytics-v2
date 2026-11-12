@@ -6,7 +6,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G  # Aumentado para evitar OOM durante processamentos pesados
+          memory: 1G
         reservations:
           memory: 128M
     environment:
